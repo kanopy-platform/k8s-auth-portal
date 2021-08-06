@@ -1,0 +1,8 @@
+FROM golangci/golangci-lint:v1.38.0-alpine as cache
+ENV GOLANGCI_LINT_CACHE /root/.cache/go-build
+WORKDIR $GOPATH/src/github.com/kanopy-platform/k8s-auth-portal
+
+# download modules and build cache
+COPY . .
+
+RUN apk update  && apk add make  && go mod download  && golangci-lint run --timeout=5m  && go test ./...
