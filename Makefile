@@ -26,10 +26,6 @@ docker-run: ## Build and run the application in a local docker container
 	@docker build -t $(CMD_NAME):latest .
 	@docker run -p ${DEFAULT_APP_PORT}:${DEFAULT_APP_PORT} $(CMD_NAME):latest
 
-.PHONY: clean
-clean: ## Clean up release artifacts
-	rm -rf ./bin ./dist
-
 .PHONY: help
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
