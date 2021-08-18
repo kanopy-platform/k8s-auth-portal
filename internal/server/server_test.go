@@ -1,22 +1,19 @@
 package server
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"testing"
 )
 
 func TestHandleRoot(t *testing.T) {
-	tests := []struct {
-		method string
-		path   string
-	}{
-		{method: "GET", path: "/"},
+	tests := []*http.Request{
+		httptest.NewRequest("GET", "/", nil),
 	}
 
 	s := New()
 
-	for _, test := range tests {
-		req := httptest.NewRequest(test.method, test.path, nil)
+	for _, req := range tests {
 		w := httptest.NewRecorder()
 
 		s.ServeHTTP(w, req)
