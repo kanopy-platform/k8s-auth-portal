@@ -30,7 +30,7 @@ func New() http.Handler {
 func (s *Server) handleRoot() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := s.tmpl.ExecuteTemplate(w, "view_index.tmpl", nil); err != nil {
-			log.Errorln("error executing template:", err)
+			log.WithError(err).Error("error executing template")
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 	}
