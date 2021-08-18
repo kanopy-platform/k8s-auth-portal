@@ -1,16 +1,26 @@
 package server
 
 import (
-	"fmt"
+	"embed"
+	"html/template"
 	"net/http"
+
+	log "github.com/sirupsen/logrus"
 )
+
+//go:embed templates
+var f embed.FS
 
 type Server struct {
 	router *http.ServeMux
+	tmpl   *template.Template
 }
 
 func New() http.Handler {
-	s := &Server{router: http.NewServeMux()}
+	s := &Server{
+		router: http.NewServeMux(),
+		tmpl:   template.Must(template.ParseFS(f, "templates/*.tmpl")),
+	}
 
 	s.router.HandleFunc("/", s.handleRoot())
 
@@ -19,6 +29,9 @@ func New() http.Handler {
 
 func (s *Server) handleRoot() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintln(w, "hello world")
+		if err := s.tmpl.ExecuteTemplate(w, "view_index.tmpl", nil); err != nil {
+			log.Errorln("error executing template:", err)
+			w.WriteHeader(http.StatusInternalServerError)
+		}
 	}
 }

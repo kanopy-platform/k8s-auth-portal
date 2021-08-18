@@ -22,7 +22,7 @@ func TestHandleRoot(t *testing.T) {
 		s.ServeHTTP(w, req)
 
 		if w.Code != 200 {
-			t.Error("test failed")
+			t.Errorf("response code %d should be 200", w.Code)
 		}
 	}
 }
