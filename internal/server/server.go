@@ -32,6 +32,7 @@ func (s *Server) handleRoot() http.HandlerFunc {
 		if err := s.tmpl.ExecuteTemplate(w, "view_index.tmpl", nil); err != nil {
 			log.WithError(err).Error("error executing template")
 			w.WriteHeader(http.StatusInternalServerError)
+			return
 		}
 	}
 }
