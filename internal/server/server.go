@@ -9,7 +9,7 @@ import (
 )
 
 //go:embed templates
-var f embed.FS
+var embeddedFS embed.FS
 
 type Server struct {
 	router *http.ServeMux
@@ -19,7 +19,7 @@ type Server struct {
 func New() http.Handler {
 	s := &Server{
 		router: http.NewServeMux(),
-		tmpl:   template.Must(template.ParseFS(f, "templates/*.tmpl")),
+		tmpl:   template.Must(template.ParseFS(embeddedFS, "templates/*.tmpl")),
 	}
 
 	s.router.HandleFunc("/", s.handleRoot())
