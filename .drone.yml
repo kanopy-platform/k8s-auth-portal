@@ -3,6 +3,9 @@ kind: pipeline
 type: kubernetes
 name: default
 
+trigger:
+  event: [push, tag]
+
 workspace:
   path: /go/src/github.com/${DRONE_REPO}
 
@@ -23,9 +26,6 @@ steps:
         from_secret: ecr_access_key
       secret_key:
         from_secret: ecr_secret_key
-    when:
-      event:
-        - push
 
   - name: publish-tag
     image: plugins/ecr
