@@ -25,7 +25,7 @@ steps:
         from_secret: ecr_secret_key
     when:
       event:
-        - commit
+        - push
 
   - name: publish-tag
     image: plugins/ecr
