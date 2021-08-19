@@ -31,8 +31,12 @@ func (s *Server) handleRoot() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := s.template.ExecuteTemplate(w, "view_index.tmpl", nil); err != nil {
 			log.WithError(err).Error("error executing template")
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			httpError(w, http.StatusInternalServerError)
 			return
 		}
 	}
+}
+
+func httpError(w http.ResponseWriter, code int) {
+	http.Error(w, http.StatusText(code), code)
 }
