@@ -3,23 +3,21 @@ package server
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
+var s http.Handler
+
+func TestMain(m *testing.M) {
+	s = New()
+	os.Exit(m.Run())
+}
+
 func TestHandleRoot(t *testing.T) {
-	tests := []*http.Request{
-		httptest.NewRequest("GET", "/", nil),
-	}
-
-	s := New()
-
-	for _, req := range tests {
-		w := httptest.NewRecorder()
-
-		s.ServeHTTP(w, req)
-
-		if w.Code != 200 {
-			t.Errorf("response code %d should be 200", w.Code)
-		}
-	}
+	w := httptest.NewRecorder()
+	s.ServeHTTP(w, httptest.NewRequest("GET", "/", nil))
+	assert.Equal(t, http.StatusOK, w.Code)
 }
