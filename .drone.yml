@@ -11,10 +11,10 @@ workspace:
 
 steps:
   - name: test
-    image: golang:1.16
+    image: golangci/golangci-lint:v1.38.0-alpine
     commands:
-      - go build
-      - go test
+      - apk add make
+      - make test
 
   - name: publish
     image: plugins/kaniko-ecr
