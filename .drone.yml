@@ -19,8 +19,8 @@ steps:
   - name: publish
     image: plugins/buildah-ecr
     settings:
-      registry: public.ecr.aws/kanopy-sandbox
-      repo: ${DRONE_REPO_NAME}
+      registry: public.ecr.aws
+      repo: kanopy-sandbox/${DRONE_REPO_NAME}
       create_repository: true
       tags:
         - git-${DRONE_COMMIT_SHA:0:7}
