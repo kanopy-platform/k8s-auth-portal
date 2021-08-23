@@ -17,8 +17,9 @@ steps:
       - go test
 
   - name: publish
-    image: plugins/ecr
+    image: plugins/kaniko-ecr
     settings:
+      registry: public.ecr.aws
       repo: public.ecr.aws/kanopy-sandbox/${DRONE_REPO_NAME}
       tags:
         - git-${DRONE_COMMIT_SHA:0:7}
