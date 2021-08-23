@@ -19,7 +19,7 @@ steps:
   - name: publish
     image: plugins/ecr
     settings:
-      repo: ${DRONE_REPO_NAME}
+      repo: public.ecr.aws/kanopy-sandbox/${DRONE_REPO_NAME}
       tags:
         - git-${DRONE_COMMIT_SHA:0:7}
       access_key:
