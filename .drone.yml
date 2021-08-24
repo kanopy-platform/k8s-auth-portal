@@ -17,11 +17,10 @@ steps:
       - make test
 
   - name: publish
-    image: plugins/buildah-ecr
+    image: plugins/kaniko-ecr
     settings:
       registry: public.ecr.aws
       repo: kanopy-sandbox/${DRONE_REPO_NAME}
-      create_repository: true
       tags:
         - git-${DRONE_COMMIT_SHA:0:7}
       access_key:
@@ -30,9 +29,10 @@ steps:
         from_secret: ecr_secret_key
 
   - name: publish-tag
-    image: plugins/ecr
+    image: plugins/kaniko-ecr
     settings:
-      repo: ${DRONE_REPO_NAME}
+      registry: public.ecr.aws
+      repo: kanopy-sandbox/${DRONE_REPO_NAME}
       tags:
         - git-${DRONE_COMMIT_SHA:0:7}
         - ${DRONE_TAG}
