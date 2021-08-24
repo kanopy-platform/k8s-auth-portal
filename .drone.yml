@@ -3,31 +3,38 @@ kind: pipeline
 type: kubernetes
 name: default
 
+trigger:
+  event: [push, tag]
+
 workspace:
   path: /go/src/github.com/${DRONE_REPO}
 
 steps:
   - name: test
-    image: golang:1.16
+    image: golangci/golangci-lint:v1.38.0-alpine
     commands:
-      - go build
-      - go test
+      - apk add make
+      - make test
 
   - name: publish
-    image: plugins/ecr
+    image: public.ecr.aws/kanopy-sandbox/kaniko-ecr:latest
     settings:
-      repo: ${DRONE_REPO_NAME}
+      registry: public.ecr.aws
+      repo: kanopy-sandbox/${DRONE_REPO_NAME}
+      create_repository: true
       tags:
         - git-${DRONE_COMMIT_SHA:0:7}
+        - latest
       access_key:
         from_secret: ecr_access_key
       secret_key:
         from_secret: ecr_secret_key
 
   - name: publish-tag
-    image: plugins/ecr
+    image: public.ecr.aws/kanopy-sandbox/kaniko-ecr:latest
     settings:
-      repo: ${DRONE_REPO_NAME}
+      registry: public.ecr.aws
+      repo: kanopy-sandbox/${DRONE_REPO_NAME}
       tags:
         - git-${DRONE_COMMIT_SHA:0:7}
         - ${DRONE_TAG}

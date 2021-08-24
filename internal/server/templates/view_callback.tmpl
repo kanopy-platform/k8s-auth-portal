@@ -1,0 +1,41 @@
+<html>
+{{ block "head" . }}{{end}}
+<body>
+	<div class="container">
+		<div class="card">
+		  <div class="card-body">
+				<pre><code>apiVersion: v1
+clusters:
+- cluster:
+    server: {{ .APIURL }}
+    certificate-authority-data: {{ .ClusterCAData }}
+  name: {{ .APIHostname }}
+contexts:
+- context:
+    cluster: {{ .APIHostname }}
+    namespace: {{ .Namespace }}
+    user: {{ .User }}
+  name: {{ .APIHostname }}
+current-context: {{ .APIHostname }}
+kind: Config
+preferences: {}
+users:
+- name: {{ .User }}
+  user:
+    as-user-extra: {}
+    auth-provider:
+      config:
+        client-id: {{ .ClientID }}
+        client-secret: {{ .ClientSecret }}
+        id-token: {{ .IDToken }}
+        idp-certificate-authority-data: {{ .IssuerCAData }}
+        idp-issuer-url: {{ .IssuerURL }}
+        refresh-token: {{ .RefreshToken }}
+      name: oidc
+</code></pre>
+		  </div>
+		</div>
+	</div>
+  {{ block "bootstrap_scripts" . }}{{end}}
+</body>
+</html>
