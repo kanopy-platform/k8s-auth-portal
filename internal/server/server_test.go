@@ -12,12 +12,36 @@ import (
 var testHandler http.Handler
 
 func TestMain(m *testing.M) {
-	testHandler = New()
+	var err error
+	testHandler, err = New()
+	if err != nil {
+		os.Exit(1)
+	}
+
 	os.Exit(m.Run())
 }
 
 func TestHandleRoot(t *testing.T) {
+	t.Parallel()
+
 	w := httptest.NewRecorder()
 	testHandler.ServeHTTP(w, httptest.NewRequest("GET", "/", nil))
 	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestHandleLoginGet(t *testing.T) {
+	t.Parallel()
+
+	w := httptest.NewRecorder()
+	testHandler.ServeHTTP(w, httptest.NewRequest("GET", "/login", nil))
+	assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+}
+
+func TestHandleLoginPost(t *testing.T) {
+	t.Parallel()
+
+	w := httptest.NewRecorder()
+	testHandler.ServeHTTP(w, httptest.NewRequest("POST", "/login", nil))
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.NotEmpty(t, w.Result().Cookies()[0])
 }
