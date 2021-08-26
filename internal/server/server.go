@@ -2,6 +2,7 @@ package server
 
 import (
 	"embed"
+	"fmt"
 	"html/template"
 	"net/http"
 
@@ -85,6 +86,8 @@ func (s *Server) handleLogin() http.HandlerFunc {
 			logAndError(w, http.StatusInternalServerError, err, "error saving session")
 			return
 		}
+
+		fmt.Fprintf(w, "session saved")
 	}
 }
 
