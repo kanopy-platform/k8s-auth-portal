@@ -40,7 +40,7 @@ func New(opts ...func(*Server)) (http.Handler, error) {
 		opt(s)
 	}
 
-	s.cookies = sessions.NewCookieStore([]byte(sessionSecret))
+	s.cookies = sessions.NewCookieStore([]byte(s.sessionSecret))
 	s.routes()
 
 	return s, nil
