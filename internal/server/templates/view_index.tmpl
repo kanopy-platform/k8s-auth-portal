@@ -1,0 +1,27 @@
+<html>
+{{ block "head" . }}{{end}}
+<body>
+  <div class="container">
+    <div class="card">
+      <div class="card-body">
+        <h4 class="card-title">Step One</h4>
+        <p class="card-text">Retrieve an authorization code.</p>
+        <form class="form-inline" action="/login" method="post" target="_blank">
+          <button type="submit" class="btn btn-primary">Get Authorization Code</button>
+        </form>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-body">
+        <h4 class="card-title">Step Two</h4>
+        <p class="card-text">Paste authorization code and retrieve kubectl credentials.</p>
+        <form class="form-inline" action="/callback" method="get">
+          <input name="code" type="text" class="form-control mb-2 mr-sm-2 mb-sm-0" id="inlineFormInput">
+          <button type="submit" class="btn btn-primary">Get Credentials</button>
+        </form>
+      </div>
+    </div>
+  </div>
+  {{ block "bootstrap_scripts" . }}{{end}}
+</body>
+</html>
