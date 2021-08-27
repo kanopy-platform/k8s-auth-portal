@@ -11,4 +11,4 @@ USER app
 COPY --from=build /go/bin/app /
 ENV APP_ADDR ":8080"
 EXPOSE 8080
-CMD ["/app"]
+ENTRYPOINT ["/app"]
