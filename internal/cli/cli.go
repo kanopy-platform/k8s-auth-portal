@@ -23,6 +23,8 @@ func NewRootCommand() *cobra.Command {
 
 	cmd.PersistentFlags().String("log-level", "info", "Configure log level")
 	cmd.PersistentFlags().String("listen-address", ":8080", "Server listen address")
+	cmd.PersistentFlags().String("session-name", "k8s-auth-portal-session", "session cookie name")
+	cmd.PersistentFlags().String("session-secret", "", "session secret")
 
 	return cmd
 }
@@ -53,5 +55,13 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 
 	log.Printf("Starting server on %s\n", addr)
 
-	return http.ListenAndServe(addr, server.New())
+	s, err := server.New(
+		server.WithSessionName(viper.GetString("session-name")),
+		server.WithSessionSecret(viper.GetString("session-secret")),
+	)
+	if err != nil {
+		return err
+	}
+
+	return http.ListenAndServe(addr, s)
 }
