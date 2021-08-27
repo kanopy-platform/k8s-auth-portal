@@ -29,6 +29,7 @@ func New(opts ...func(*Server)) (http.Handler, error) {
 		return nil, err
 	}
 
+	// set defaults
 	s := &Server{
 		Router:        mux.NewRouter(),
 		template:      template.Must(template.ParseFS(embeddedFS, "templates/*.tmpl")),
@@ -36,10 +37,12 @@ func New(opts ...func(*Server)) (http.Handler, error) {
 		sessionSecret: randSecret,
 	}
 
+	// load options
 	for _, opt := range opts {
 		opt(s)
 	}
 
+	// configure server
 	s.cookies = sessions.NewCookieStore([]byte(s.sessionSecret))
 	s.routes()
 
