@@ -24,7 +24,7 @@ type Server struct {
 }
 
 func New(opts ...func(*Server)) (http.Handler, error) {
-	sessionSecret, err := random.SecureString(32)
+	randSecret, err := random.SecureString(32)
 	if err != nil {
 		return nil, err
 	}
@@ -33,7 +33,7 @@ func New(opts ...func(*Server)) (http.Handler, error) {
 		Router:        mux.NewRouter(),
 		template:      template.Must(template.ParseFS(embeddedFS, "templates/*.tmpl")),
 		sessionName:   "k8s-auth-portal-session",
-		sessionSecret: sessionSecret,
+		sessionSecret: randSecret,
 	}
 
 	for _, opt := range opts {
