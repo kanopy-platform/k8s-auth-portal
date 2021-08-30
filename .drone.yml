@@ -17,10 +17,10 @@ steps:
       - make test
 
   - name: publish
-    image: public.ecr.aws/kanopy-sandbox/kaniko-ecr:latest
+    image: plugins/kaniko-ecr
     settings:
-      registry: public.ecr.aws
-      repo: kanopy-sandbox/${DRONE_REPO_NAME}
+      registry: public.ecr.aws/kanopy-sandbox
+      repo: ${DRONE_REPO_NAME}
       create_repository: true
       tags:
         - git-${DRONE_COMMIT_SHA:0:7}
@@ -31,10 +31,10 @@ steps:
         from_secret: ecr_secret_key
 
   - name: publish-tag
-    image: public.ecr.aws/kanopy-sandbox/kaniko-ecr:latest
+    image: plugins/kaniko-ecr
     settings:
-      registry: public.ecr.aws
-      repo: kanopy-sandbox/${DRONE_REPO_NAME}
+      registry: public.ecr.aws/kanopy-sandbox
+      repo: ${DRONE_REPO_NAME}
       tags:
         - git-${DRONE_COMMIT_SHA:0:7}
         - ${DRONE_TAG}
