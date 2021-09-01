@@ -6,15 +6,25 @@ name: default
 workspace:
   path: /go/src/github.com/${DRONE_REPO}
 
+volumes:
+  - name: cache
+    temp: {}
+
 steps:
   - name: test
     image: golangci/golangci-lint:v1.38.0-alpine
+    volumes:
+      - name: cache
+        path: /go
     commands:
       - apk add make
       - make test
 
   - name: build
     image: plugins/kaniko-ecr
+    volumes:
+      - name: cache
+        path: /go
     pull: always
     settings:
       no_push: true
@@ -23,6 +33,9 @@ steps:
 
   - name: publish
     image: plugins/kaniko-ecr
+    volumes:
+      - name: cache
+        path: /go
     pull: always
     settings:
       registry: public.ecr.aws/kanopy-sandbox
@@ -40,6 +53,9 @@ steps:
 
   - name: publish-tag
     image: plugins/kaniko-ecr
+    volumes:
+      - name: cache
+        path: /go
     pull: always
     settings:
       registry: public.ecr.aws/kanopy-sandbox
