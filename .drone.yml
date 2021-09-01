@@ -4,20 +4,42 @@ type: kubernetes
 name: default
 
 trigger:
-  event: [push, tag]
+  branch: [main]
 
 workspace:
   path: /go/src/github.com/${DRONE_REPO}
 
+volumes:
+  - name: cache
+    temp: {}
+
 steps:
   - name: test
     image: golangci/golangci-lint:v1.38.0-alpine
+    volumes:
+      - name: cache
+        path: /go
     commands:
       - apk add make
       - make test
 
+  - name: build
+    image: plugins/kaniko-ecr
+    volumes:
+      - name: cache
+        path: /go
+    pull: always
+    settings:
+      no_push: true
+    when:
+      event: [pull_request]
+
   - name: publish
     image: plugins/kaniko-ecr
+    volumes:
+      - name: cache
+        path: /go
+    pull: always
     settings:
       registry: public.ecr.aws/kanopy-sandbox
       repo: ${DRONE_REPO_NAME}
@@ -29,9 +51,15 @@ steps:
         from_secret: ecr_access_key
       secret_key:
         from_secret: ecr_secret_key
+    when:
+      event: [push]
 
   - name: publish-tag
     image: plugins/kaniko-ecr
+    volumes:
+      - name: cache
+        path: /go
+    pull: always
     settings:
       registry: public.ecr.aws/kanopy-sandbox
       repo: ${DRONE_REPO_NAME}
@@ -43,5 +71,4 @@ steps:
       secret_key:
         from_secret: ecr_secret_key
     when:
-      event:
-        - tag
+      event: [tag]
