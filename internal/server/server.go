@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"net/url"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
@@ -21,9 +22,19 @@ type Server struct {
 	cookies       *sessions.CookieStore
 	sessionName   string
 	sessionSecret string
+	//useClusterCA        bool
+	apiServerURL *url.URL
+	//clusterCA           string
+	issuerURL *url.URL
+	//issuerCA            string
+	kubectlClientID string
+	//kubectlClientSecret string
+	extraScopes string
 }
 
-func New(opts ...func(*Server)) (http.Handler, error) {
+type ServerFuncOpt func(*Server) error
+
+func New(opts ...ServerFuncOpt) (http.Handler, error) {
 	randSecret, err := random.SecureString(32)
 	if err != nil {
 		return nil, err
@@ -31,15 +42,28 @@ func New(opts ...func(*Server)) (http.Handler, error) {
 
 	// set defaults
 	s := &Server{
-		Router:        mux.NewRouter(),
-		template:      template.Must(template.ParseFS(embeddedFS, "templates/*.tmpl")),
-		sessionName:   "k8s-auth-portal-session",
-		sessionSecret: randSecret,
+		Router:          mux.NewRouter(),
+		template:        template.Must(template.ParseFS(embeddedFS, "templates/*.tmpl")),
+		sessionName:     "k8s-auth-portal-session",
+		sessionSecret:   randSecret,
+		kubectlClientID: "kubectl",
+		extraScopes:     "offline_access,groups",
 	}
+
+	// default builders
+	o := []ServerFuncOpt{
+		WithAPIServerURL("https://api.example.com"),
+		WithIssuerURL("https://dex.example.com"),
+	}
+
+	opts = append(o, opts...)
 
 	// load options
 	for _, opt := range opts {
-		opt(s)
+		err := opt(s)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// configure server
