@@ -25,6 +25,12 @@ func NewRootCommand() *cobra.Command {
 	cmd.PersistentFlags().String("listen-address", ":8080", "Server listen address")
 	cmd.PersistentFlags().String("session-name", "k8s-auth-portal-session", "session cookie name")
 	cmd.PersistentFlags().String("session-secret", "", "session secret")
+	cmd.PersistentFlags().String("kubectl-client-id", "kubectl", "public oidc client-id for kubectl")
+	cmd.PersistentFlags().StringSlice("scope", []string{}, "extra oidc scope claims")
+	cmd.PersistentFlags().String("api-url", "https://api.example.com", "kubernetes API URL")
+	cmd.PersistentFlags().String("issuer-url", "https://dex.example.com", "oidc issuer URL")
+	cmd.PersistentFlags().String("cluster-ca-filepath", "", "cluster CA certificate filepath")
+	cmd.PersistentFlags().String("kubectl-client-secret-filepath", "", "path to public odic client secret")
 
 	return cmd
 }
@@ -50,18 +56,40 @@ func (c *RootCommand) persistentPreRunE(cmd *cobra.Command, args []string) error
 	return nil
 }
 
+func getServerOptions() []server.ServerFuncOpt {
+	opts := []server.ServerFuncOpt{
+		server.WithSessionName(viper.GetString("session-name")),
+		server.WithSessionSecret(viper.GetString("session-secret")),
+		server.WithAPIServerURL(viper.GetString("api-url")),
+		server.WithKubectlClientID(viper.GetString("kubectl-client-id")),
+		server.WithIssuerURL(viper.GetString("issuer-url")),
+		server.WithExtraScopes(viper.GetStringSlice("extra-scopes")...),
+	}
+
+	if v := viper.GetString("cluster-ca-filepath"); v != "" {
+		opts = append(opts, server.WithClusterCA(v))
+	}
+
+	if v := viper.GetString("kubectl-client-secret-filepath"); v != "" {
+		opts = append(opts, server.WithKubectlClientSecret(v))
+	}
+
+	return opts
+}
+
 func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 	addr := viper.GetString("listen-address")
 
 	log.Printf("Starting server on %s\n", addr)
 
-	s, err := server.New(
-		server.WithSessionName(viper.GetString("session-name")),
-		server.WithSessionSecret(viper.GetString("session-secret")),
-	)
+	opts := getServerOptions()
+
+	s, err := server.New(opts...)
 	if err != nil {
 		return err
 	}
+
+	log.Debug("debug mode on")
 
 	return http.ListenAndServe(addr, s)
 }

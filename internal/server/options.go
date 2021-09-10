@@ -1,6 +1,10 @@
 package server
 
-import "net/url"
+import (
+	"encoding/base64"
+	"io/ioutil"
+	"net/url"
+)
 
 func WithSessionName(name string) ServerFuncOpt {
 	return func(s *Server) error {
@@ -24,7 +28,7 @@ func WithSessionSecret(secret string) ServerFuncOpt {
 func WithAPIServerURL(api string) ServerFuncOpt {
 	return func(s *Server) error {
 		if api != "" {
-			u, err := url.Parse(api)
+			u, err := url.ParseRequestURI(api)
 			if err != nil {
 				return err
 			}
@@ -47,7 +51,7 @@ func WithKubectlClientID(clientID string) ServerFuncOpt {
 func WithIssuerURL(issuer string) ServerFuncOpt {
 	return func(s *Server) error {
 		if issuer != "" {
-			u, err := url.Parse(issuer)
+			u, err := url.ParseRequestURI(issuer)
 			if err != nil {
 				return err
 			}
@@ -58,12 +62,37 @@ func WithIssuerURL(issuer string) ServerFuncOpt {
 	}
 }
 
-func WithExtraScopes(scopes string) ServerFuncOpt {
+func WithExtraScopes(extraScopes ...string) ServerFuncOpt {
 	return func(s *Server) error {
-		if scopes != "" {
-			s.extraScopes = scopes
+		for _, es := range extraScopes {
+			if es != "" {
+				s.scopes = append(s.scopes, es)
+			}
 		}
 
+		return nil
+	}
+}
+
+func WithClusterCA(filePath string) ServerFuncOpt {
+	return func(s *Server) error {
+		data, err := ioutil.ReadFile(filePath)
+		if err != nil {
+			return err
+		}
+
+		s.clusterCA = base64.StdEncoding.EncodeToString([]byte(data))
+		return nil
+	}
+}
+
+func WithKubectlClientSecret(filePath string) ServerFuncOpt {
+	return func(s *Server) error {
+		data, err := ioutil.ReadFile(filePath)
+		if err != nil {
+			return err
+		}
+		s.kubectlClientSecret = string(data)
 		return nil
 	}
 }

@@ -18,18 +18,16 @@ var embeddedFS embed.FS
 
 type Server struct {
 	*mux.Router
-	template      *template.Template
-	cookies       *sessions.CookieStore
-	sessionName   string
-	sessionSecret string
-	//useClusterCA        bool
-	apiServerURL *url.URL
-	//clusterCA           string
-	issuerURL *url.URL
-	//issuerCA            string
-	kubectlClientID string
-	//kubectlClientSecret string
-	extraScopes string
+	template            *template.Template
+	cookies             *sessions.CookieStore
+	sessionName         string
+	sessionSecret       string
+	apiServerURL        *url.URL
+	clusterCA           string
+	issuerURL           *url.URL
+	kubectlClientID     string
+	kubectlClientSecret string
+	scopes              []string
 }
 
 type ServerFuncOpt func(*Server) error
@@ -42,12 +40,13 @@ func New(opts ...ServerFuncOpt) (http.Handler, error) {
 
 	// set defaults
 	s := &Server{
-		Router:          mux.NewRouter(),
-		template:        template.Must(template.ParseFS(embeddedFS, "templates/*.tmpl")),
-		sessionName:     "k8s-auth-portal-session",
-		sessionSecret:   randSecret,
-		kubectlClientID: "kubectl",
-		extraScopes:     "offline_access,groups",
+		Router:              mux.NewRouter(),
+		template:            template.Must(template.ParseFS(embeddedFS, "templates/*.tmpl")),
+		sessionName:         "k8s-auth-portal-session",
+		sessionSecret:       randSecret,
+		kubectlClientSecret: randSecret,
+		kubectlClientID:     "kubectl",
+		scopes:              []string{"offline_access", "groups"},
 	}
 
 	// default builders
