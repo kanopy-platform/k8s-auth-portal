@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -17,6 +18,8 @@ func TestMain(m *testing.M) {
 		WithClusterCA("testdata/test.crt"),
 	)
 	if err != nil {
+		fmt.Println("Debugging drone error")
+		fmt.Println(err)
 		os.Exit(1)
 	}
 
