@@ -41,7 +41,7 @@ func WithAPIServerURL(api string) ServerFuncOpt {
 func WithKubectlClientID(clientID string) ServerFuncOpt {
 	return func(s *Server) error {
 		if clientID != "" {
-			s.kubectlClientID = clientID
+			s.oauth2Config.ClientID = clientID
 		}
 
 		return nil
@@ -66,7 +66,7 @@ func WithExtraScopes(extraScopes ...string) ServerFuncOpt {
 	return func(s *Server) error {
 		for _, es := range extraScopes {
 			if es != "" {
-				s.scopes = append(s.scopes, es)
+				s.oauth2Config.Scopes = append(s.oauth2Config.Scopes, es)
 			}
 		}
 
@@ -76,23 +76,29 @@ func WithExtraScopes(extraScopes ...string) ServerFuncOpt {
 
 func WithClusterCA(filePath string) ServerFuncOpt {
 	return func(s *Server) error {
-		data, err := ioutil.ReadFile(filePath)
-		if err != nil {
-			return err
+		if filePath != "" {
+			data, err := ioutil.ReadFile(filePath)
+			if err != nil {
+				return err
+			}
+
+			s.clusterCA = base64.StdEncoding.EncodeToString([]byte(data))
 		}
 
-		s.clusterCA = base64.StdEncoding.EncodeToString([]byte(data))
 		return nil
 	}
 }
 
 func WithKubectlClientSecret(filePath string) ServerFuncOpt {
 	return func(s *Server) error {
-		data, err := ioutil.ReadFile(filePath)
-		if err != nil {
-			return err
+		if filePath != "" {
+			data, err := ioutil.ReadFile(filePath)
+			if err != nil {
+				return err
+			}
+			s.oauth2Config.ClientSecret = string(data)
 		}
-		s.kubectlClientSecret = string(data)
+
 		return nil
 	}
 }

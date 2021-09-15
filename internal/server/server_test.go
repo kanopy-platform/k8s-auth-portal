@@ -13,7 +13,9 @@ var testHandler http.Handler
 
 func TestMain(m *testing.M) {
 	var err error
-	testHandler, err = New()
+	testHandler, err = New(
+		WithClusterCA("testdata/test.crt"),
+	)
 	if err != nil {
 		os.Exit(1)
 	}
@@ -42,6 +44,6 @@ func TestHandleLoginPost(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	testHandler.ServeHTTP(w, httptest.NewRequest("POST", "/login", nil))
-	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, http.StatusSeeOther, w.Code)
 	assert.NotEmpty(t, w.Result().Cookies()[0])
 }

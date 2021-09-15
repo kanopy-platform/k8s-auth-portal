@@ -60,18 +60,12 @@ func getServerOptions() []server.ServerFuncOpt {
 	opts := []server.ServerFuncOpt{
 		server.WithSessionName(viper.GetString("session-name")),
 		server.WithSessionSecret(viper.GetString("session-secret")),
-		server.WithAPIServerURL(viper.GetString("api-url")),
 		server.WithKubectlClientID(viper.GetString("kubectl-client-id")),
+		server.WithExtraScopes(viper.GetStringSlice("scope")...),
+		server.WithAPIServerURL(viper.GetString("api-url")),
 		server.WithIssuerURL(viper.GetString("issuer-url")),
-		server.WithExtraScopes(viper.GetStringSlice("extra-scopes")...),
-	}
-
-	if v := viper.GetString("cluster-ca-filepath"); v != "" {
-		opts = append(opts, server.WithClusterCA(v))
-	}
-
-	if v := viper.GetString("kubectl-client-secret-filepath"); v != "" {
-		opts = append(opts, server.WithKubectlClientSecret(v))
+		server.WithClusterCA(viper.GetString("cluster-ca-filepath")),
+		server.WithKubectlClientSecret(viper.GetString("kubectl-client-secret-filepath")),
 	}
 
 	return opts
