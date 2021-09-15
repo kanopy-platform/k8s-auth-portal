@@ -1,7 +1,6 @@
 package server
 
 import (
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -14,12 +13,8 @@ var testHandler http.Handler
 
 func TestMain(m *testing.M) {
 	var err error
-	testHandler, err = New(
-		WithClusterCA("testdata/test.crt"),
-	)
+	testHandler, err = New()
 	if err != nil {
-		fmt.Println("Debugging drone error")
-		fmt.Println(err)
 		os.Exit(1)
 	}
 
@@ -47,6 +42,6 @@ func TestHandleLoginPost(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	testHandler.ServeHTTP(w, httptest.NewRequest("POST", "/login", nil))
-	assert.Equal(t, http.StatusSeeOther, w.Code)
+	assert.Equal(t, http.StatusOK, w.Code)
 	assert.NotEmpty(t, w.Result().Cookies()[0])
 }

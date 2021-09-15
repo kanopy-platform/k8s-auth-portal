@@ -17,18 +17,13 @@ func TestOptions(t *testing.T) {
 	t.Parallel()
 
 	// Test with default parameters
-	// Note: a valid ClusterCA .crt is required
-	const testCrtPath = "testdata/test.crt"
-	crtData, err := ioutil.ReadFile(testCrtPath)
-	assert.NoError(t, err)
-
 	s, err := New(
 		WithSessionName(""),
 		WithSessionSecret(""),
 		WithAPIServerURL(""),
 		WithIssuerURL(""),
 		WithExtraScopes(""),
-		WithClusterCA(testCrtPath),
+		WithClusterCA(""),
 		WithKubectlClientID(""),
 		WithKubectlClientSecret(""),
 	)
@@ -37,16 +32,11 @@ func TestOptions(t *testing.T) {
 	assert.Empty(t, s.(*Server).sessionSecret)
 	assert.NotEmpty(t, s.(*Server).apiServerURL)
 	assert.NotEmpty(t, s.(*Server).issuerURL)
-	assert.Equal(t, base64.StdEncoding.EncodeToString([]byte(crtData)), s.(*Server).clusterCA)
+	assert.Empty(t, s.(*Server).clusterCA)
 	assert.NotEmpty(t, s.(*Server).oauth2Config.ClientID)
 	assert.NotEmpty(t, s.(*Server).oauth2Config.ClientSecret)
-	assert.NotEmpty(t, s.(*Server).oauth2Config.Endpoint)
 	assert.NotEmpty(t, s.(*Server).oauth2Config.RedirectURL)
 	assert.Len(t, s.(*Server).oauth2Config.Scopes, 5)
-	assert.NotEmpty(t, s.(*Server).client)
-	assert.NotEmpty(t, s.(*Server).context)
-	assert.NotEmpty(t, s.(*Server).provider)
-	assert.NotEmpty(t, s.(*Server).verifier)
 
 	// Test setting all options
 	const wantSecret = "dummy-secret"
@@ -56,6 +46,10 @@ func TestOptions(t *testing.T) {
 	wantAPIServerURL, err := url.Parse(testAPIServerURL)
 	assert.NoError(t, err)
 	wantIssuerURL, err := url.Parse(testIssuerURL)
+	assert.NoError(t, err)
+
+	const testCrtPath = "testdata/test.crt"
+	crtData, err := ioutil.ReadFile(testCrtPath)
 	assert.NoError(t, err)
 
 	s, err = New(
@@ -76,13 +70,8 @@ func TestOptions(t *testing.T) {
 	assert.Equal(t, base64.StdEncoding.EncodeToString([]byte(crtData)), s.(*Server).clusterCA)
 	assert.Equal(t, "test", s.(*Server).oauth2Config.ClientID)
 	assert.Equal(t, wantSecret, s.(*Server).oauth2Config.ClientSecret)
-	assert.NotEmpty(t, s.(*Server).oauth2Config.Endpoint)
 	assert.NotEmpty(t, s.(*Server).oauth2Config.RedirectURL)
 	assert.Len(t, s.(*Server).oauth2Config.Scopes, 6)
-	assert.NotEmpty(t, s.(*Server).client)
-	assert.NotEmpty(t, s.(*Server).context)
-	assert.NotEmpty(t, s.(*Server).provider)
-	assert.NotEmpty(t, s.(*Server).verifier)
 
 	// Test invalid options
 	errorTests := []optTest{
