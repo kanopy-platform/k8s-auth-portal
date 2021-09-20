@@ -47,7 +47,7 @@ func New(opts ...ServerFuncOpt) (http.Handler, error) {
 		oauth2Config: &oauth2.Config{
 			ClientID:     "kubectl",
 			ClientSecret: randSecret,
-			RedirectURL:  "urn:ietf:wg:oauth:2.0:oob", // special "out-of-browser" redirect https://github.com/coreos/dex/blob/master/Documentation/custom-scopes-claims-clients.md#public-clients
+			RedirectURL:  "urn:ietf:wg:oauth:2.0:oob", // special "out-of-browser" redirect https://dexidp.io/docs/custom-scopes-claims-clients/#public-clients
 			Scopes:       []string{oidc.ScopeOpenID, "profile", "email", "offline_access", "groups"},
 		},
 	}
