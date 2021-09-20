@@ -33,16 +33,20 @@ type Server struct {
 type ServerFuncOpt func(*Server) error
 
 func New(opts ...ServerFuncOpt) (http.Handler, error) {
+	randSecret, err := random.SecureString(32)
+	if err != nil {
+		return nil, err
+	}
 
 	// set defaults
 	s := &Server{
 		Router:        mux.NewRouter(),
 		template:      template.Must(template.ParseFS(embeddedFS, "templates/*.tmpl")),
 		sessionName:   "k8s-auth-portal-session",
-		sessionSecret: "",
+		sessionSecret: randSecret,
 		oauth2Config: &oauth2.Config{
 			ClientID:     "kubectl",
-			ClientSecret: "replace_this_public_client_secret",
+			ClientSecret: randSecret,
 			RedirectURL:  "urn:ietf:wg:oauth:2.0:oob", // special "out-of-browser" redirect https://github.com/coreos/dex/blob/master/Documentation/custom-scopes-claims-clients.md#public-clients
 			Scopes:       []string{oidc.ScopeOpenID, "profile", "email", "offline_access", "groups"},
 		},

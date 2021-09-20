@@ -29,7 +29,7 @@ func TestOptions(t *testing.T) {
 	)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, s.(*Server).sessionName)
-	assert.Empty(t, s.(*Server).sessionSecret)
+	assert.NotEmpty(t, s.(*Server).sessionSecret)
 	assert.NotEmpty(t, s.(*Server).apiServerURL)
 	assert.NotEmpty(t, s.(*Server).issuerURL)
 	assert.Empty(t, s.(*Server).clusterCA)
