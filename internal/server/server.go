@@ -5,11 +5,14 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"net/url"
 
+	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
 	"github.com/kanopy-platform/k8s-auth-portal/pkg/random"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/oauth2"
 )
 
 //go:embed templates
@@ -21,9 +24,15 @@ type Server struct {
 	cookies       *sessions.CookieStore
 	sessionName   string
 	sessionSecret string
+	apiServerURL  *url.URL
+	clusterCA     string
+	issuerURL     *url.URL
+	oauth2Config  *oauth2.Config
 }
 
-func New(opts ...func(*Server)) (http.Handler, error) {
+type ServerFuncOpt func(*Server) error
+
+func New(opts ...ServerFuncOpt) (http.Handler, error) {
 	randSecret, err := random.SecureString(32)
 	if err != nil {
 		return nil, err
@@ -35,11 +44,28 @@ func New(opts ...func(*Server)) (http.Handler, error) {
 		template:      template.Must(template.ParseFS(embeddedFS, "templates/*.tmpl")),
 		sessionName:   "k8s-auth-portal-session",
 		sessionSecret: randSecret,
+		oauth2Config: &oauth2.Config{
+			ClientID:     "kubectl",
+			ClientSecret: randSecret,
+			RedirectURL:  "urn:ietf:wg:oauth:2.0:oob", // special "out-of-browser" redirect https://dexidp.io/docs/custom-scopes-claims-clients/#public-clients
+			Scopes:       []string{oidc.ScopeOpenID, "profile", "email", "offline_access", "groups"},
+		},
 	}
+
+	// default builders
+	o := []ServerFuncOpt{
+		WithAPIServerURL("https://api.example.com"),
+		WithIssuerURL("https://dex.example.com"),
+	}
+
+	opts = append(o, opts...)
 
 	// load options
 	for _, opt := range opts {
-		opt(s)
+		err := opt(s)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// configure server
@@ -52,6 +78,11 @@ func New(opts ...func(*Server)) (http.Handler, error) {
 func (s *Server) routes() {
 	s.HandleFunc("/", s.handleRoot())
 	s.HandleFunc("/login", s.handleLogin()).Methods(http.MethodPost)
+}
+
+func logAndError(w http.ResponseWriter, code int, err error, msg string) {
+	log.WithError(err).Error(msg)
+	http.Error(w, http.StatusText(code), code)
 }
 
 func (s *Server) getSession(r *http.Request) *sessions.Session {
@@ -92,9 +123,4 @@ func (s *Server) handleLogin() http.HandlerFunc {
 
 		fmt.Fprintf(w, "session saved")
 	}
-}
-
-func logAndError(w http.ResponseWriter, code int, err error, msg string) {
-	log.WithError(err).Error(msg)
-	http.Error(w, http.StatusText(code), code)
 }
