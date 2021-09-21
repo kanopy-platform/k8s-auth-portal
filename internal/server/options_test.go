@@ -2,8 +2,8 @@ package server
 
 import (
 	"encoding/base64"
-	"io/ioutil"
 	"net/url"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -49,7 +49,7 @@ func TestOptions(t *testing.T) {
 	assert.NoError(t, err)
 
 	const testCrtPath = "testdata/test.crt"
-	crtData, err := ioutil.ReadFile(testCrtPath)
+	crtData, err := os.ReadFile(testCrtPath)
 	assert.NoError(t, err)
 
 	s, err = New(

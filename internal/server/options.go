@@ -2,8 +2,8 @@ package server
 
 import (
 	"encoding/base64"
-	"io/ioutil"
 	"net/url"
+	"os"
 )
 
 func WithSessionName(name string) ServerFuncOpt {
@@ -77,7 +77,7 @@ func WithExtraScopes(extraScopes ...string) ServerFuncOpt {
 func WithClusterCA(filePath string) ServerFuncOpt {
 	return func(s *Server) error {
 		if filePath != "" {
-			data, err := ioutil.ReadFile(filePath)
+			data, err := os.ReadFile(filePath)
 			if err != nil {
 				return err
 			}
@@ -92,7 +92,7 @@ func WithClusterCA(filePath string) ServerFuncOpt {
 func WithKubectlClientSecret(filePath string) ServerFuncOpt {
 	return func(s *Server) error {
 		if filePath != "" {
-			data, err := ioutil.ReadFile(filePath)
+			data, err := os.ReadFile(filePath)
 			if err != nil {
 				return err
 			}
