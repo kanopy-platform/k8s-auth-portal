@@ -41,7 +41,7 @@ func WithAPIServerURL(api string) ServerFuncOpt {
 func WithKubectlClientID(clientID string) ServerFuncOpt {
 	return func(s *Server) error {
 		if clientID != "" {
-			s.oauth2Config.ClientID = clientID
+			s.kubectlClientID = clientID
 		}
 
 		return nil
@@ -66,7 +66,7 @@ func WithExtraScopes(extraScopes ...string) ServerFuncOpt {
 	return func(s *Server) error {
 		for _, es := range extraScopes {
 			if es != "" {
-				s.oauth2Config.Scopes = append(s.oauth2Config.Scopes, es)
+				s.scopes = append(s.scopes, es)
 			}
 		}
 
@@ -96,7 +96,7 @@ func WithKubectlClientSecret(filePath string) ServerFuncOpt {
 			if err != nil {
 				return err
 			}
-			s.oauth2Config.ClientSecret = string(data)
+			s.kubectlClientSecret = string(data)
 		}
 
 		return nil

@@ -24,37 +24,41 @@ import (
 //go:embed templates
 var embeddedFS embed.FS
 
-type ExternalFuncs struct {
-	// Stores all funcs/methods needed within server that needs to be mocked for unit tests.
-	// These act like a function pointer
+type OIDCClientProvider interface {
+	NewProvider(ctx context.Context, issuer string) (*oidc.Provider, error)
+}
 
-	// oidc.NewProvider()
-	oidcNewProvider func(ctx context.Context, issuer string) (*oidc.Provider, error)
+type OIDCClient struct{}
 
-	// oauth2.Config.Exchange()
-	oauth2ConfigExchange func(c *oauth2.Config, ctx context.Context, code string, opts ...oauth2.AuthCodeOption) (*oauth2.Token, error)
+func (o *OIDCClient) NewProvider(ctx context.Context, issuer string) (*oidc.Provider, error) {
+	return oidc.NewProvider(ctx, issuer)
+}
 
-	// oidc.IDTokenVerifier.Verify()
-	oidcIDTokenVerifierVerify func(v *oidc.IDTokenVerifier, ctx context.Context, rawIDToken string) (*oidc.IDToken, error)
+type Oauth2ConfigProvider interface {
+	AuthCodeURL(state string, opts ...oauth2.AuthCodeOption) string
+	Exchange(ctx context.Context, code string, opts ...oauth2.AuthCodeOption) (*oauth2.Token, error)
+}
 
-	// oidc.IDToken.Claims()
-	oidcIDTokenClaims func(i *oidc.IDToken, v interface{}) error
+type OIDCIDTokenVerifier interface {
+	Verify(ctx context.Context, rawIDToken string) (*oidc.IDToken, error)
 }
 
 type Server struct {
 	*mux.Router
-	externalFuncs *ExternalFuncs
-	template      *template.Template
-	cookies       *sessions.CookieStore
-	sessionName   string
-	sessionSecret string
-	apiServerURL  *url.URL
-	clusterCA     string
-	issuerURL     *url.URL
-	oauth2Config  *oauth2.Config
-	client        *http.Client // OIDC client to support custom root CA certificates
-	provider      *oidc.Provider
-	verifier      *oidc.IDTokenVerifier
+	oidcProvider        OIDCClientProvider
+	template            *template.Template
+	cookies             *sessions.CookieStore
+	sessionName         string
+	sessionSecret       string
+	apiServerURL        *url.URL
+	clusterCA           string
+	issuerURL           *url.URL
+	kubectlClientID     string
+	kubectlClientSecret string
+	scopes              []string
+	oauth2Config        Oauth2ConfigProvider
+	client              *http.Client        // OIDC client to support custom root CA certificates
+	verifier            OIDCIDTokenVerifier // *oidc.IDTokenVerifier
 }
 
 type ServerFuncOpt func(*Server) error
@@ -67,17 +71,14 @@ func New(opts ...ServerFuncOpt) (*Server, error) {
 
 	// set defaults
 	s := &Server{
-		Router:        mux.NewRouter(),
-		externalFuncs: defaultExternalFuncs(),
-		template:      template.Must(template.ParseFS(embeddedFS, "templates/*.tmpl")),
-		sessionName:   "k8s-auth-portal-session",
-		sessionSecret: randSecret,
-		oauth2Config: &oauth2.Config{
-			ClientID:     "kubectl",
-			ClientSecret: randSecret,
-			RedirectURL:  "urn:ietf:wg:oauth:2.0:oob", // special "out-of-browser" redirect https://dexidp.io/docs/custom-scopes-claims-clients/#public-clients
-			Scopes:       []string{oidc.ScopeOpenID, "profile", "email", "offline_access", "groups"},
-		},
+		Router:              mux.NewRouter(),
+		oidcProvider:        &OIDCClient{},
+		template:            template.Must(template.ParseFS(embeddedFS, "templates/*.tmpl")),
+		sessionName:         "k8s-auth-portal-session",
+		sessionSecret:       randSecret,
+		kubectlClientID:     "kubectl",
+		kubectlClientSecret: randSecret,
+		scopes:              []string{oidc.ScopeOpenID, "profile", "email", "offline_access", "groups"},
 	}
 
 	// default builders
@@ -101,15 +102,6 @@ func New(opts ...ServerFuncOpt) (*Server, error) {
 	s.routes()
 
 	return s, nil
-}
-
-func defaultExternalFuncs() *ExternalFuncs {
-	return &ExternalFuncs{
-		oidcNewProvider:           oidc.NewProvider,
-		oauth2ConfigExchange:      (*oauth2.Config).Exchange,
-		oidcIDTokenVerifierVerify: (*oidc.IDTokenVerifier).Verify,
-		oidcIDTokenClaims:         (*oidc.IDToken).Claims,
-	}
 }
 
 func httpClientForRootCAs(rootCABytes []byte) (*http.Client, error) {
@@ -152,13 +144,19 @@ func (s *Server) ConfigureOpenID() error {
 	}
 
 	oidcContext := oidc.ClientContext(context.Background(), s.client)
-	s.provider, err = s.externalFuncs.oidcNewProvider(oidcContext, s.issuerURL.String())
+	provider, err := s.oidcProvider.NewProvider(oidcContext, s.issuerURL.String())
 	if err != nil {
 		return err
 	}
 
-	s.verifier = s.provider.Verifier(&oidc.Config{ClientID: s.oauth2Config.ClientID})
-	s.oauth2Config.Endpoint = s.provider.Endpoint()
+	s.verifier = provider.Verifier(&oidc.Config{ClientID: s.kubectlClientID})
+	s.oauth2Config = &oauth2.Config{
+		ClientID:     s.kubectlClientID,
+		ClientSecret: s.kubectlClientSecret,
+		Endpoint:     provider.Endpoint(),
+		RedirectURL:  "urn:ietf:wg:oauth:2.0:oob",
+		Scopes:       s.scopes,
+	}
 
 	return nil
 }
@@ -244,7 +242,7 @@ func (s *Server) handleCallback() http.HandlerFunc {
 		}
 
 		// convert authorization code into an OAuth2 token
-		oauth2Token, err := s.externalFuncs.oauth2ConfigExchange(s.oauth2Config, oidcContext, code)
+		oauth2Token, err := s.oauth2Config.Exchange(oidcContext, code)
 		if err != nil {
 			logAndError(w, http.StatusUnauthorized, err, "error converting code to token")
 			return
@@ -258,7 +256,7 @@ func (s *Server) handleCallback() http.HandlerFunc {
 		}
 
 		// verify the ID token
-		idToken, err := s.externalFuncs.oidcIDTokenVerifierVerify(s.verifier, oidcContext, rawIDToken)
+		idToken, err := s.verifier.Verify(oidcContext, rawIDToken)
 		if err != nil {
 			logAndError(w, http.StatusInternalServerError, err, "failed to verify id_token")
 			return
@@ -274,7 +272,7 @@ func (s *Server) handleCallback() http.HandlerFunc {
 		var claims struct {
 			Email string `json:"email"`
 		}
-		if err := s.externalFuncs.oidcIDTokenClaims(idToken, &claims); err != nil {
+		if err := idToken.Claims(&claims); err != nil {
 			logAndError(w, http.StatusInternalServerError, err, "error extracting claims")
 			return
 		}
@@ -288,8 +286,8 @@ func (s *Server) handleCallback() http.HandlerFunc {
 			"ClusterCAData": s.clusterCA,
 			"IssuerURL":     s.issuerURL.String(),
 			"IssuerCAData":  s.clusterCA,
-			"ClientID":      s.oauth2Config.ClientID,
-			"ClientSecret":  s.oauth2Config.ClientSecret,
+			"ClientID":      s.kubectlClientID,
+			"ClientSecret":  s.kubectlClientSecret,
 		}
 
 		if err := s.template.ExecuteTemplate(w, "view_callback.tmpl", data); err != nil {

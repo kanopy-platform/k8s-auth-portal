@@ -33,10 +33,9 @@ func TestOptions(t *testing.T) {
 	assert.NotEmpty(t, s.apiServerURL)
 	assert.NotEmpty(t, s.issuerURL)
 	assert.Empty(t, s.clusterCA)
-	assert.NotEmpty(t, s.oauth2Config.ClientID)
-	assert.NotEmpty(t, s.oauth2Config.ClientSecret)
-	assert.NotEmpty(t, s.oauth2Config.RedirectURL)
-	assert.Len(t, s.oauth2Config.Scopes, 5)
+	assert.NotEmpty(t, s.kubectlClientID)
+	assert.NotEmpty(t, s.kubectlClientSecret)
+	assert.Len(t, s.scopes, 5)
 
 	// Test setting all options
 	const testAPIServerURL = "http://another.example.com"
@@ -72,10 +71,9 @@ func TestOptions(t *testing.T) {
 	assert.Equal(t, wantAPIServerURL, s.apiServerURL)
 	assert.Equal(t, wantIssuerURL, s.issuerURL)
 	assert.Equal(t, base64.StdEncoding.EncodeToString([]byte(crtData)), s.clusterCA)
-	assert.Equal(t, "test", s.oauth2Config.ClientID)
-	assert.Equal(t, wantSecret, s.oauth2Config.ClientSecret)
-	assert.NotEmpty(t, s.oauth2Config.RedirectURL)
-	assert.Len(t, s.oauth2Config.Scopes, 6)
+	assert.Equal(t, "test", s.kubectlClientID)
+	assert.Equal(t, wantSecret, s.kubectlClientSecret)
+	assert.Len(t, s.scopes, 6)
 
 	// Test invalid options
 	errorTests := []optTest{
