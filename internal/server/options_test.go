@@ -28,15 +28,15 @@ func TestOptions(t *testing.T) {
 		WithKubectlClientSecret(""),
 	)
 	assert.NoError(t, err)
-	assert.NotEmpty(t, s.(*Server).sessionName)
-	assert.NotEmpty(t, s.(*Server).sessionSecret)
-	assert.NotEmpty(t, s.(*Server).apiServerURL)
-	assert.NotEmpty(t, s.(*Server).issuerURL)
-	assert.Empty(t, s.(*Server).clusterCA)
-	assert.NotEmpty(t, s.(*Server).oauth2Config.ClientID)
-	assert.NotEmpty(t, s.(*Server).oauth2Config.ClientSecret)
-	assert.NotEmpty(t, s.(*Server).oauth2Config.RedirectURL)
-	assert.Len(t, s.(*Server).oauth2Config.Scopes, 5)
+	assert.NotEmpty(t, s.sessionName)
+	assert.NotEmpty(t, s.sessionSecret)
+	assert.NotEmpty(t, s.apiServerURL)
+	assert.NotEmpty(t, s.issuerURL)
+	assert.Empty(t, s.clusterCA)
+	assert.NotEmpty(t, s.oauth2Config.ClientID)
+	assert.NotEmpty(t, s.oauth2Config.ClientSecret)
+	assert.NotEmpty(t, s.oauth2Config.RedirectURL)
+	assert.Len(t, s.oauth2Config.Scopes, 5)
 
 	// Test setting all options
 	const testAPIServerURL = "http://another.example.com"
@@ -67,15 +67,15 @@ func TestOptions(t *testing.T) {
 		WithKubectlClientSecret(testSecretPath),
 	)
 	assert.NoError(t, err)
-	assert.Equal(t, "test", s.(*Server).sessionName)
-	assert.Equal(t, "test", s.(*Server).sessionSecret)
-	assert.Equal(t, wantAPIServerURL, s.(*Server).apiServerURL)
-	assert.Equal(t, wantIssuerURL, s.(*Server).issuerURL)
-	assert.Equal(t, base64.StdEncoding.EncodeToString([]byte(crtData)), s.(*Server).clusterCA)
-	assert.Equal(t, "test", s.(*Server).oauth2Config.ClientID)
-	assert.Equal(t, wantSecret, s.(*Server).oauth2Config.ClientSecret)
-	assert.NotEmpty(t, s.(*Server).oauth2Config.RedirectURL)
-	assert.Len(t, s.(*Server).oauth2Config.Scopes, 6)
+	assert.Equal(t, "test", s.sessionName)
+	assert.Equal(t, "test", s.sessionSecret)
+	assert.Equal(t, wantAPIServerURL, s.apiServerURL)
+	assert.Equal(t, wantIssuerURL, s.issuerURL)
+	assert.Equal(t, base64.StdEncoding.EncodeToString([]byte(crtData)), s.clusterCA)
+	assert.Equal(t, "test", s.oauth2Config.ClientID)
+	assert.Equal(t, wantSecret, s.oauth2Config.ClientSecret)
+	assert.NotEmpty(t, s.oauth2Config.RedirectURL)
+	assert.Len(t, s.oauth2Config.Scopes, 6)
 
 	// Test invalid options
 	errorTests := []optTest{

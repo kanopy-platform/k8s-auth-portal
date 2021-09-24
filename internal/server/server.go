@@ -52,15 +52,14 @@ type Server struct {
 	clusterCA     string
 	issuerURL     *url.URL
 	oauth2Config  *oauth2.Config
-	client        *http.Client    // OIDC client to support custom root CA certificates
-	context       context.Context // OIDC context to support custom root CA certificates
+	client        *http.Client // OIDC client to support custom root CA certificates
 	provider      *oidc.Provider
 	verifier      *oidc.IDTokenVerifier
 }
 
 type ServerFuncOpt func(*Server) error
 
-func New(opts ...ServerFuncOpt) (http.Handler, error) {
+func New(opts ...ServerFuncOpt) (*Server, error) {
 	randSecret, err := random.SecureString(32)
 	if err != nil {
 		return nil, err
@@ -152,8 +151,8 @@ func (s *Server) ConfigureOpenID() error {
 		}
 	}
 
-	s.context = oidc.ClientContext(context.Background(), s.client)
-	s.provider, err = s.externalFuncs.oidcNewProvider(s.context, s.issuerURL.String())
+	oidcContext := oidc.ClientContext(context.Background(), s.client)
+	s.provider, err = s.externalFuncs.oidcNewProvider(oidcContext, s.issuerURL.String())
 	if err != nil {
 		return err
 	}
@@ -198,6 +197,11 @@ func (s *Server) handleLogin() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := s.getSession(r)
 
+		// Normally this randomStr would actually be a state, and saved in session.Values["state"].
+		// Then in handleCallback() check the state in URL matches the session.Values["state"].
+		// However, our app does not do the full login -> redirect -> callback loop.
+		// The user hits /login, copies code, goes back to root page, and hits /callback.
+		// So there is no way to pass a state in the URL between the login and callback.
 		randomStr, err := random.SecureString(32)
 		if err != nil {
 			logAndError(w, http.StatusInternalServerError, err, "error generating random string for state")
@@ -210,7 +214,6 @@ func (s *Server) handleLogin() http.HandlerFunc {
 			logAndError(w, http.StatusInternalServerError, err, "error generating random string for nonce")
 			return
 		}
-
 		session.Values["nonce"] = nonce
 
 		if err := session.Save(r, w); err != nil {
@@ -231,9 +234,17 @@ func (s *Server) handleCallback() http.HandlerFunc {
 		}
 
 		session := s.getSession(r)
+		oidcContext := oidc.ClientContext(r.Context(), s.client)
+
+		// handle requests without an authorization code
+		code := r.URL.Query().Get("code")
+		if code == "" {
+			logAndError(w, http.StatusUnauthorized, fmt.Errorf("authorization code empty"), "error in authorization code")
+			return
+		}
 
 		// convert authorization code into an OAuth2 token
-		oauth2Token, err := s.externalFuncs.oauth2ConfigExchange(s.oauth2Config, s.context, r.URL.Query().Get("code"))
+		oauth2Token, err := s.externalFuncs.oauth2ConfigExchange(s.oauth2Config, oidcContext, code)
 		if err != nil {
 			logAndError(w, http.StatusUnauthorized, err, "error converting code to token")
 			return
@@ -247,7 +258,7 @@ func (s *Server) handleCallback() http.HandlerFunc {
 		}
 
 		// verify the ID token
-		idToken, err := s.externalFuncs.oidcIDTokenVerifierVerify(s.verifier, s.context, rawIDToken)
+		idToken, err := s.externalFuncs.oidcIDTokenVerifierVerify(s.verifier, oidcContext, rawIDToken)
 		if err != nil {
 			logAndError(w, http.StatusInternalServerError, err, "failed to verify id_token")
 			return
