@@ -7,15 +7,7 @@ import (
 	"golang.org/x/oauth2"
 )
 
-type OIDCClientProvider interface {
-	NewProvider(ctx context.Context, issuer string) (*oidc.Provider, error)
-}
-
-type OIDCClient struct{}
-
-func (o *OIDCClient) NewProvider(ctx context.Context, issuer string) (*oidc.Provider, error) {
-	return oidc.NewProvider(ctx, issuer)
-}
+type OIDCNewProviderFunc func(ctx context.Context, issuer string) (*oidc.Provider, error)
 
 type Oauth2ConfigProvider interface {
 	AuthCodeURL(state string, opts ...oauth2.AuthCodeOption) string

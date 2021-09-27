@@ -17,9 +17,7 @@ import (
 
 var idTokenString string
 
-type MockOIDCClient struct{}
-
-func (m *MockOIDCClient) NewProvider(ctx context.Context, issuer string) (*oidc.Provider, error) {
+func MockOIDCNewProvider(ctx context.Context, issuer string) (*oidc.Provider, error) {
 	return &oidc.Provider{}, nil
 }
 

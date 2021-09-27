@@ -26,7 +26,7 @@ var embeddedFS embed.FS
 
 type Server struct {
 	*mux.Router
-	oidcProvider        OIDCClientProvider
+	oidcNewProviderFunc OIDCNewProviderFunc
 	template            *template.Template
 	cookies             *sessions.CookieStore
 	sessionName         string
@@ -53,7 +53,7 @@ func New(opts ...ServerFuncOpt) (*Server, error) {
 	// set defaults
 	s := &Server{
 		Router:              mux.NewRouter(),
-		oidcProvider:        &OIDCClient{},
+		oidcNewProviderFunc: oidc.NewProvider,
 		template:            template.Must(template.ParseFS(embeddedFS, "templates/*.tmpl")),
 		sessionName:         "k8s-auth-portal-session",
 		sessionSecret:       randSecret,
@@ -80,6 +80,9 @@ func New(opts ...ServerFuncOpt) (*Server, error) {
 
 	// configure server
 	s.cookies = sessions.NewCookieStore([]byte(s.sessionSecret))
+	if err := s.ConfigureOpenID(); err != nil {
+		return nil, err
+	}
 	s.routes()
 
 	return s, nil
@@ -125,7 +128,7 @@ func (s *Server) ConfigureOpenID() error {
 	}
 
 	oidcContext := oidc.ClientContext(context.Background(), s.client)
-	provider, err := s.oidcProvider.NewProvider(oidcContext, s.issuerURL.String())
+	provider, err := s.oidcNewProviderFunc(oidcContext, s.issuerURL.String())
 	if err != nil {
 		return err
 	}

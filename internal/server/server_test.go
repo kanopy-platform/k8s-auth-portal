@@ -17,18 +17,10 @@ var server *Server
 func TestMain(m *testing.M) {
 	var err error
 	server, err = New(
-		WithClusterCA("testdata/test.crt"),
+		WithMockOIDCNewProvider(MockOIDCNewProvider),
 	)
 	if err != nil {
 		log.Printf("server.New failed, error: %v", err)
-		os.Exit(1)
-	}
-
-	// must override Provider before calling ConfigureOpenID
-	server.oidcProvider = &MockOIDCClient{}
-
-	if err = server.ConfigureOpenID(); err != nil {
-		log.Printf("server.ConfigureOpenID failed, error: %v", err)
 		os.Exit(1)
 	}
 

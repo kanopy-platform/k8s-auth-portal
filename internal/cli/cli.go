@@ -83,10 +83,6 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if err := s.ConfigureOpenID(); err != nil {
-		return err
-	}
-
 	log.Debug("debug mode on")
 
 	return http.ListenAndServe(addr, s)
