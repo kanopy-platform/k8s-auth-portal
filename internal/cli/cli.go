@@ -83,8 +83,7 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	err = s.ConfigureOpenID()
-	if err != nil {
+	if err := s.ConfigureOpenID(); err != nil {
 		return err
 	}
 

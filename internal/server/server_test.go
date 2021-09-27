@@ -26,8 +26,7 @@ func TestMain(m *testing.M) {
 
 	server.oidcProvider = &mocks.MockOIDCClient{}
 
-	err = server.ConfigureOpenID()
-	if err != nil {
+	if err = server.ConfigureOpenID(); err != nil {
 		log.Printf("server.ConfigureOpenID failed, error: %v", err)
 		os.Exit(1)
 	}
