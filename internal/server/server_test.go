@@ -7,6 +7,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gorilla/sessions"
 	"github.com/kanopy-platform/k8s-auth-portal/pkg/mocks"
 	"github.com/stretchr/testify/assert"
@@ -33,7 +34,7 @@ func TestMain(m *testing.M) {
 
 	// override external funcs/methods with mocks
 	server.oauth2Config = &mocks.MockOauth2Config{}
-	server.verifier = &mocks.MockOIDCIDTokenVerifier{}
+	server.verifier = oidc.NewVerifier("dex.example.com", &mocks.MockKeySet{}, &oidc.Config{})
 
 	os.Exit(m.Run())
 }
