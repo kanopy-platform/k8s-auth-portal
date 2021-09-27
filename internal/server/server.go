@@ -38,8 +38,8 @@ type Server struct {
 	kubectlClientSecret string
 	scopes              []string
 	oauth2Config        Oauth2ConfigProvider
-	client              *http.Client        // OIDC client to support custom root CA certificates
-	verifier            OIDCIDTokenVerifier // *oidc.IDTokenVerifier
+	client              *http.Client // OIDC client to support custom root CA certificates
+	verifier            OIDCIDTokenVerifier
 }
 
 type ServerFuncOpt func(*Server) error

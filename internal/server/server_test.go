@@ -9,7 +9,6 @@ import (
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gorilla/sessions"
-	"github.com/kanopy-platform/k8s-auth-portal/pkg/mocks"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -25,16 +24,16 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	server.oidcProvider = &mocks.MockOIDCClient{}
+	// must override Provider before calling ConfigureOpenID
+	server.oidcProvider = &MockOIDCClient{}
 
 	if err = server.ConfigureOpenID(); err != nil {
 		log.Printf("server.ConfigureOpenID failed, error: %v", err)
 		os.Exit(1)
 	}
 
-	// override external funcs/methods with mocks
-	server.oauth2Config = &mocks.MockOauth2Config{}
-	server.verifier = oidc.NewVerifier("dex.example.com", &mocks.MockKeySet{}, &oidc.Config{})
+	server.oauth2Config = &MockOauth2Config{}
+	server.verifier = oidc.NewVerifier("", &MockKeySet{}, &oidc.Config{ClientID: server.kubectlClientID})
 
 	os.Exit(m.Run())
 }
@@ -95,24 +94,6 @@ func TestHandleCallbackGet(t *testing.T) {
 	server.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 
-	// Code to Token Exchange returns error
-	// prevExchangeMethod := server.externalFuncs.oauth2ConfigExchange
-	// server.externalFuncs.oauth2ConfigExchange = mocks.MockOauth2ConfigExchangeError
-	// w = httptest.NewRecorder()
-	// req = httptest.NewRequest("GET", validCallbackUrl, nil)
-	// server.ServeHTTP(w, req)
-	// assert.Equal(t, http.StatusUnauthorized, w.Code)
-	// server.externalFuncs.oauth2ConfigExchange = prevExchangeMethod
-
-	// ID Token Verify returns error
-	// prevVerifyMethod := server.externalFuncs.oidcIDTokenVerifierVerify
-	// server.externalFuncs.oidcIDTokenVerifierVerify = mocks.MockOidcIDTokenVerifierVerifyError
-	// w = httptest.NewRecorder()
-	// req = httptest.NewRequest("GET", validCallbackUrl, nil)
-	// server.ServeHTTP(w, req)
-	// assert.Equal(t, http.StatusInternalServerError, w.Code)
-	// server.externalFuncs.oidcIDTokenVerifierVerify = prevVerifyMethod
-
 	// Nonce doesn't match
 	w = httptest.NewRecorder()
 	req = httptest.NewRequest("GET", validCallbackUrl, nil)
@@ -120,15 +101,4 @@ func TestHandleCallbackGet(t *testing.T) {
 	session.Values["nonce"] = "invalid nonce"
 	server.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
-
-	// ID Token Claims returns error
-	// prevClaimsMethod := server.externalFuncs.oidcIDTokenClaims
-	// server.externalFuncs.oidcIDTokenClaims = mocks.MockOidcIDTokenClaimsError
-	// w = httptest.NewRecorder()
-	// req = httptest.NewRequest("GET", validCallbackUrl, nil)
-	// session = server.getSession(req)
-	// session.Values["nonce"] = ""
-	// server.ServeHTTP(w, req)
-	// assert.Equal(t, http.StatusInternalServerError, w.Code)
-	// server.externalFuncs.oidcIDTokenClaims = prevClaimsMethod
 }
