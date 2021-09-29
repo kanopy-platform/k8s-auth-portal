@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/base64"
+	"net/http"
 	"net/url"
 	"os"
 )
@@ -109,6 +110,13 @@ func WithMockOIDCNewProvider(mockFunc OIDCNewProviderFunc) ServerFuncOpt {
 			s.oidcNewProviderFunc = mockFunc
 		}
 
+		return nil
+	}
+}
+
+func WithHTTPClient(c *http.Client) ServerFuncOpt {
+	return func(s *Server) error {
+		s.client = c
 		return nil
 	}
 }

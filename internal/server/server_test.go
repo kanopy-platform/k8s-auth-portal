@@ -1,10 +1,14 @@
 package server
 
 import (
+	"encoding/json"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -14,10 +18,46 @@ import (
 
 var server *Server
 
+type providerJSON struct {
+	Issuer   string `json:"issuer"`
+	AuthURL  string `json:"authorization_endpoint"`
+	TokenURL string `json:"token_endpoint"`
+}
+
+type OIDCProviderRoundTripper struct{}
+
+func (o *OIDCProviderRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
+	fmt.Println(r)
+
+	resp := &http.Response{
+		StatusCode: 200,
+	}
+
+	p := &providerJSON{
+		Issuer:   "https://dex.example.com",
+		AuthURL:  "https://dex.example.com/auth",
+		TokenURL: "https://dex.example.com/token",
+	}
+
+	body, err := json.Marshal(p)
+	if err != nil {
+		return nil, err
+	}
+
+	resp.Body = io.NopCloser(strings.NewReader(string(body)))
+
+	return resp, nil
+}
+
 func TestMain(m *testing.M) {
 	var err error
+
+	client := &http.Client{
+		Transport: &OIDCProviderRoundTripper{},
+	}
+
 	server, err = New(
-		WithMockOIDCNewProvider(MockOIDCNewProvider),
+		WithHTTPClient(client),
 	)
 	if err != nil {
 		log.Printf("server.New failed, error: %v", err)

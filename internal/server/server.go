@@ -121,7 +121,7 @@ func (s *Server) ConfigureOpenID() error {
 		if err != nil {
 			return err
 		}
-	} else {
+	} else if s.client == nil {
 		s.client = &http.Client{
 			Timeout: 10 * time.Second,
 		}
