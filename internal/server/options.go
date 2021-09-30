@@ -104,19 +104,11 @@ func WithKubectlClientSecret(filePath string) ServerFuncOpt {
 	}
 }
 
-func WithMockOIDCNewProvider(mockFunc OIDCNewProviderFunc) ServerFuncOpt {
-	return func(s *Server) error {
-		if mockFunc != nil {
-			s.oidcNewProviderFunc = mockFunc
-		}
-
-		return nil
-	}
-}
-
 func WithHTTPClient(c *http.Client) ServerFuncOpt {
 	return func(s *Server) error {
-		s.client = c
+		if c != nil {
+			s.client = c
+		}
 		return nil
 	}
 }

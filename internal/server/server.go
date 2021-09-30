@@ -24,9 +24,17 @@ import (
 //go:embed templates
 var embeddedFS embed.FS
 
+type oauth2ConfigProvider interface {
+	AuthCodeURL(state string, opts ...oauth2.AuthCodeOption) string
+	Exchange(ctx context.Context, code string, opts ...oauth2.AuthCodeOption) (*oauth2.Token, error)
+}
+
+type oidcIDTokenVerifier interface {
+	Verify(ctx context.Context, rawIDToken string) (*oidc.IDToken, error)
+}
+
 type Server struct {
 	*mux.Router
-	oidcNewProviderFunc OIDCNewProviderFunc
 	template            *template.Template
 	cookies             *sessions.CookieStore
 	sessionName         string
@@ -37,9 +45,9 @@ type Server struct {
 	kubectlClientID     string
 	kubectlClientSecret string
 	scopes              []string
-	oauth2Config        Oauth2ConfigProvider
+	oauth2Config        oauth2ConfigProvider
 	client              *http.Client // OIDC client to support custom root CA certificates
-	verifier            OIDCIDTokenVerifier
+	verifier            oidcIDTokenVerifier
 }
 
 type ServerFuncOpt func(*Server) error
@@ -53,7 +61,6 @@ func New(opts ...ServerFuncOpt) (*Server, error) {
 	// set defaults
 	s := &Server{
 		Router:              mux.NewRouter(),
-		oidcNewProviderFunc: oidc.NewProvider,
 		template:            template.Must(template.ParseFS(embeddedFS, "templates/*.tmpl")),
 		sessionName:         "k8s-auth-portal-session",
 		sessionSecret:       randSecret,
@@ -110,25 +117,28 @@ func httpClientForRootCAs(rootCABytes []byte) (*http.Client, error) {
 func (s *Server) ConfigureOpenID() error {
 	var err error
 
-	if s.clusterCA != "" {
-		// decode root certificates
-		rootCABytes, err := base64.StdEncoding.DecodeString(s.clusterCA)
-		if err != nil {
-			return err
-		}
-		// get HTTP Client with custom root CAs
-		s.client, err = httpClientForRootCAs(rootCABytes)
-		if err != nil {
-			return err
-		}
-	} else if s.client == nil {
-		s.client = &http.Client{
-			Timeout: 10 * time.Second,
+	// if the client has not been overridden with a mock client
+	if s.client == nil {
+		if s.clusterCA != "" {
+			// decode root certificates
+			rootCABytes, err := base64.StdEncoding.DecodeString(s.clusterCA)
+			if err != nil {
+				return err
+			}
+			// get HTTP Client with custom root CAs
+			s.client, err = httpClientForRootCAs(rootCABytes)
+			if err != nil {
+				return err
+			}
+		} else {
+			s.client = &http.Client{
+				Timeout: 10 * time.Second,
+			}
 		}
 	}
 
 	oidcContext := oidc.ClientContext(context.Background(), s.client)
-	provider, err := s.oidcNewProviderFunc(oidcContext, s.issuerURL.String())
+	provider, err := oidc.NewProvider(oidcContext, s.issuerURL.String())
 	if err != nil {
 		return err
 	}

@@ -10,20 +10,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/golang-jwt/jwt"
 	"golang.org/x/oauth2"
 )
 
 var idTokenString string
+var testNonce string
 
-func MockOIDCNewProvider(ctx context.Context, issuer string) (*oidc.Provider, error) {
-	return &oidc.Provider{}, nil
-}
+type mockOauth2Config struct{}
 
-type MockOauth2Config struct{}
-
-func (m *MockOauth2Config) AuthCodeURL(state string, opts ...oauth2.AuthCodeOption) string {
+func (m *mockOauth2Config) AuthCodeURL(state string, opts ...oauth2.AuthCodeOption) string {
 	u := url.URL{
 		Scheme: "https",
 		Host:   "dex.example.com",
@@ -37,7 +33,7 @@ func (m *MockOauth2Config) AuthCodeURL(state string, opts ...oauth2.AuthCodeOpti
 	return u.String()
 }
 
-func (m *MockOauth2Config) Exchange(ctx context.Context, code string, opts ...oauth2.AuthCodeOption) (*oauth2.Token, error) {
+func (m *mockOauth2Config) Exchange(ctx context.Context, code string, opts ...oauth2.AuthCodeOption) (*oauth2.Token, error) {
 	oauth2Token := &oauth2.Token{
 		AccessToken:  "",
 		TokenType:    "",
@@ -54,7 +50,7 @@ func (m *MockOauth2Config) Exchange(ctx context.Context, code string, opts ...oa
 		"iss":            "",
 		"aud":            "kubectl",
 		"exp":            time.Now().Add(1 * time.Hour).Unix(),
-		"nonce":          "",
+		"nonce":          testNonce,
 		"email":          "kilgore@kilgore.trout",
 		"email_verified": true,
 		"name":           "Kilgore Trout",
@@ -72,10 +68,9 @@ func (m *MockOauth2Config) Exchange(ctx context.Context, code string, opts ...oa
 	return oauth2Token.WithExtra(rawField), nil
 }
 
-type MockKeySet struct {
-}
+type mockKeySet struct{}
 
-func (ks *MockKeySet) VerifySignature(ctx context.Context, jwt string) (payload []byte, err error) {
+func (ks *mockKeySet) VerifySignature(ctx context.Context, jwt string) (payload []byte, err error) {
 	// Need to extract payload from JWT
 	// The payload extraction needs to be equivalent to oidc.parseJWT()
 	parts := strings.Split(idTokenString, ".")

@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/base64"
+	"net/http"
 	"net/url"
 	"os"
 	"testing"
@@ -16,6 +17,10 @@ type optTest struct {
 func TestOptions(t *testing.T) {
 	t.Parallel()
 
+	client := &http.Client{
+		Transport: &oidcProviderRoundTripper{},
+	}
+
 	// Test with default parameters
 	s, err := New(
 		WithSessionName(""),
@@ -26,10 +31,10 @@ func TestOptions(t *testing.T) {
 		WithClusterCA(""),
 		WithKubectlClientID(""),
 		WithKubectlClientSecret(""),
-		WithMockOIDCNewProvider(MockOIDCNewProvider),
+		WithHTTPClient(client),
 	)
 	assert.NoError(t, err)
-	assert.NotEmpty(t, s.oidcNewProviderFunc)
+	assert.NotNil(t, s.client)
 	assert.NotEmpty(t, s.sessionName)
 	assert.NotEmpty(t, s.sessionSecret)
 	assert.NotEmpty(t, s.apiServerURL)
@@ -66,10 +71,10 @@ func TestOptions(t *testing.T) {
 		WithClusterCA(testCrtPath),
 		WithKubectlClientID("test"),
 		WithKubectlClientSecret(testSecretPath),
-		WithMockOIDCNewProvider(MockOIDCNewProvider),
+		WithHTTPClient(client),
 	)
 	assert.NoError(t, err)
-	assert.NotEmpty(t, s.oidcNewProviderFunc)
+	assert.NotNil(t, s.client)
 	assert.Equal(t, "test", s.sessionName)
 	assert.Equal(t, "test", s.sessionSecret)
 	assert.Equal(t, wantAPIServerURL, s.apiServerURL)

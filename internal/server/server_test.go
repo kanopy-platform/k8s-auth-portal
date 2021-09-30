@@ -2,7 +2,6 @@ package server
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -12,7 +11,6 @@ import (
 	"testing"
 
 	"github.com/coreos/go-oidc/v3/oidc"
-	"github.com/gorilla/sessions"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -24,11 +22,9 @@ type providerJSON struct {
 	TokenURL string `json:"token_endpoint"`
 }
 
-type OIDCProviderRoundTripper struct{}
+type oidcProviderRoundTripper struct{}
 
-func (o *OIDCProviderRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
-	fmt.Println(r)
-
+func (o *oidcProviderRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
 	resp := &http.Response{
 		StatusCode: 200,
 	}
@@ -53,7 +49,7 @@ func TestMain(m *testing.M) {
 	var err error
 
 	client := &http.Client{
-		Transport: &OIDCProviderRoundTripper{},
+		Transport: &oidcProviderRoundTripper{},
 	}
 
 	server, err = New(
@@ -64,8 +60,8 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	server.oauth2Config = &MockOauth2Config{}
-	server.verifier = oidc.NewVerifier("", &MockKeySet{}, &oidc.Config{ClientID: server.kubectlClientID})
+	server.oauth2Config = &mockOauth2Config{}
+	server.verifier = oidc.NewVerifier("", &mockKeySet{}, &oidc.Config{ClientID: server.kubectlClientID})
 
 	os.Exit(m.Run())
 }
@@ -98,39 +94,54 @@ func TestHandleLoginPost(t *testing.T) {
 func TestHandleCallbackGet(t *testing.T) {
 	t.Parallel()
 
-	var (
-		w       *httptest.ResponseRecorder
-		req     *http.Request
-		session *sessions.Session
-	)
-
 	const validCallbackUrl = "/callback?code=testcode"
+	testNonce = "test-nonce-123"
 
-	// Success path
-	w = httptest.NewRecorder()
-	req = httptest.NewRequest("GET", validCallbackUrl, nil)
-	session = server.getSession(req)
-	session.Values["nonce"] = ""
-	server.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusOK, w.Code)
+	tests := []struct {
+		url            string
+		nonce          string
+		wantHttpStatus int
+	}{
+		{
+			// success case
+			url:            validCallbackUrl,
+			nonce:          testNonce,
+			wantHttpStatus: http.StatusOK,
+		},
+		{
+			// error in request URL
+			url:            "/callback?code=testcode&error=some-error",
+			nonce:          testNonce,
+			wantHttpStatus: http.StatusBadRequest,
+		},
+		{
+			// no authorization code
+			url:            "/callback",
+			nonce:          testNonce,
+			wantHttpStatus: http.StatusUnauthorized,
+		},
+		{
+			// empty authorization code
+			url:            "/callback?code=",
+			nonce:          testNonce,
+			wantHttpStatus: http.StatusUnauthorized,
+		},
+		{
+			// nonce doesn't match expected
+			url:            validCallbackUrl,
+			nonce:          "invalid nonce",
+			wantHttpStatus: http.StatusUnauthorized,
+		},
+	}
 
-	// Error in request URL
-	w = httptest.NewRecorder()
-	req = httptest.NewRequest("GET", "/callback?code=testcode&error=some-error", nil)
-	server.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusBadRequest, w.Code)
+	for _, test := range tests {
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", test.url, nil)
 
-	// Empty authorization code
-	w = httptest.NewRecorder()
-	req = httptest.NewRequest("GET", validCallbackUrl, nil)
-	server.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusUnauthorized, w.Code)
+		session := server.getSession(req)
+		session.Values["nonce"] = test.nonce
 
-	// Nonce doesn't match
-	w = httptest.NewRecorder()
-	req = httptest.NewRequest("GET", validCallbackUrl, nil)
-	session = server.getSession(req)
-	session.Values["nonce"] = "invalid nonce"
-	server.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusUnauthorized, w.Code)
+		server.ServeHTTP(rr, req)
+		assert.Equal(t, test.wantHttpStatus, rr.Code)
+	}
 }
