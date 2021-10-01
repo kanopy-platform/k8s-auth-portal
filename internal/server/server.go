@@ -119,6 +119,10 @@ func (s *Server) ConfigureOpenID() error {
 
 	// if the client has not been overridden with a mock client
 	if s.client == nil {
+		s.client = &http.Client{
+			Timeout: 10 * time.Second,
+		}
+
 		if s.clusterCA != "" {
 			// decode root certificates
 			rootCABytes, err := base64.StdEncoding.DecodeString(s.clusterCA)
@@ -129,10 +133,6 @@ func (s *Server) ConfigureOpenID() error {
 			s.client, err = httpClientForRootCAs(rootCABytes)
 			if err != nil {
 				return err
-			}
-		} else {
-			s.client = &http.Client{
-				Timeout: 10 * time.Second,
 			}
 		}
 	}
@@ -148,7 +148,7 @@ func (s *Server) ConfigureOpenID() error {
 		ClientID:     s.kubectlClientID,
 		ClientSecret: s.kubectlClientSecret,
 		Endpoint:     provider.Endpoint(),
-		RedirectURL:  "urn:ietf:wg:oauth:2.0:oob",
+		RedirectURL:  "urn:ietf:wg:oauth:2.0:oob", // special "out-of-browser" redirect https://dexidp.io/docs/custom-scopes-claims-clients/#public-clients
 		Scopes:       s.scopes,
 	}
 
@@ -283,6 +283,11 @@ func (s *Server) handleCallback() http.HandlerFunc {
 			"ClientID":      s.kubectlClientID,
 			"ClientSecret":  s.kubectlClientSecret,
 		}
+
+		log.WithFields(log.Fields{
+			"email":           claims.Email,
+			"x-forwarded-for": r.Header.Get("x-forwarded-for"),
+		}).Info("kubeconfig generated")
 
 		if err := s.template.ExecuteTemplate(w, "view_callback.tmpl", data); err != nil {
 			logAndError(w, http.StatusInternalServerError, err, "error executing template")
