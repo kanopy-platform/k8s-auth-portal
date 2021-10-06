@@ -158,7 +158,7 @@ func (s *Server) ConfigureOpenID() error {
 func (s *Server) routes() {
 	s.HandleFunc("/", s.handleRoot())
 	s.HandleFunc("/login", s.handleLogin()).Methods(http.MethodPost)
-	s.HandleFunc("/callback", s.handleCallback()).Methods(http.MethodGet)
+	s.HandleFunc("/callback", s.handleCallback()).Methods(http.MethodPost)
 }
 
 func logAndError(w http.ResponseWriter, code int, err error, msg string) {
@@ -178,7 +178,17 @@ func (s *Server) getSession(r *http.Request) *sessions.Session {
 
 func (s *Server) handleRoot() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if err := s.template.ExecuteTemplate(w, "view_index.tmpl", nil); err != nil {
+		csrfToken, err := random.SecureString(32)
+		if err != nil {
+			logAndError(w, http.StatusInternalServerError, err, "error generating random string for CSRF Token")
+			return
+		}
+
+		data := map[string]interface{}{
+			"CSRFToken": csrfToken,
+		}
+
+		if err := s.template.ExecuteTemplate(w, "view_index.tmpl", data); err != nil {
 			logAndError(w, http.StatusInternalServerError, err, "error executing template")
 			return
 		}
@@ -187,18 +197,37 @@ func (s *Server) handleRoot() http.HandlerFunc {
 
 func (s *Server) handleLogin() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			logAndError(w, http.StatusInternalServerError, err, "error parsing form")
+			return
+		}
+
 		session := s.getSession(r)
 
-		// Normally this randomStr would be a state, and saved in session.Values["state"].
-		// Then in handleCallback() check the state in URL matches the session.Values["state"].
-		// However, our app does not do the full login -> redirect -> callback loop.
-		// The user hits /login, copies code, goes back to root page, and hits /callback.
-		// So there is no way to pass a state in the URL between the login and callback.
-		randomStr, err := random.SecureString(32)
+		// CSRF attack prevention:
+		// In normal OIDC flow, login -> redirect -> callback, a state would be passed into
+		// the AuthCodeURL and saved in the session. After redirect, the callback handler would
+		// check that the state in the URL matches the state stored in the session.
+		//
+		// However, our app's RedirectURL is out-of-band and does not redirect to the callback
+		// handler. So there is no way to do "state" validation using the URL.
+		//
+		// Instead we generate and store a CSRF token as a hidden form field in index.html.
+		// Pass it into /login, which saves it in the session cookie.
+		// The /callback handler will verify the passed in CSRF token matches that from the session.
+		// This achieves the equivalent functionality as using "state" in URL.
+		state, err := random.SecureString(32)
 		if err != nil {
 			logAndError(w, http.StatusInternalServerError, err, "error generating random string for state")
 			return
 		}
+
+		csrfToken := r.PostFormValue("csrfToken")
+		if csrfToken == "" {
+			logAndError(w, http.StatusBadRequest, fmt.Errorf("csrfToken empty or does not exist"), "invalid CSRF Token")
+			return
+		}
+		session.Values["csrfToken"] = csrfToken
 
 		// generate nonce
 		nonce, err := random.SecureString(32)
@@ -213,12 +242,17 @@ func (s *Server) handleLogin() http.HandlerFunc {
 			return
 		}
 
-		http.Redirect(w, r, s.oauth2Config.AuthCodeURL(randomStr, oidc.Nonce(nonce)), http.StatusSeeOther)
+		http.Redirect(w, r, s.oauth2Config.AuthCodeURL(state, oidc.Nonce(nonce)), http.StatusSeeOther)
 	}
 }
 
 func (s *Server) handleCallback() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			logAndError(w, http.StatusInternalServerError, err, "error parsing form")
+			return
+		}
+
 		// handle requests that contain an error
 		if err := r.URL.Query().Get("error"); err != "" {
 			logAndError(w, http.StatusBadRequest, fmt.Errorf(err+": "+r.URL.Query().Get("error_description")), "error in request")
@@ -228,8 +262,13 @@ func (s *Server) handleCallback() http.HandlerFunc {
 		session := s.getSession(r)
 		oidcContext := oidc.ClientContext(r.Context(), s.client)
 
-		// handle requests without an authorization code
-		code := r.URL.Query().Get("code")
+		csrfToken := r.PostFormValue("csrfToken")
+		if csrfToken == "" || csrfToken != session.Values["csrfToken"] {
+			logAndError(w, http.StatusBadRequest, fmt.Errorf("expected: %v, got: %v", session.Values["csrfToken"], csrfToken), "invalid CSRF Token")
+			return
+		}
+
+		code := r.FormValue("code")
 		if code == "" {
 			logAndError(w, http.StatusUnauthorized, fmt.Errorf("authorization code empty"), "error in authorization code")
 			return

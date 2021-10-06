@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -85,60 +86,130 @@ func TestHandleLoginGet(t *testing.T) {
 func TestHandleLoginPost(t *testing.T) {
 	t.Parallel()
 
-	w := httptest.NewRecorder()
-	server.ServeHTTP(w, httptest.NewRequest("POST", "/login", nil))
-	assert.Equal(t, http.StatusSeeOther, w.Code)
-	assert.NotEmpty(t, w.Result().Cookies()[0])
+	tests := []struct {
+		body           string
+		wantHttpStatus int
+	}{
+		{
+			// empty POST form
+			body:           "",
+			wantHttpStatus: http.StatusBadRequest,
+		},
+		{
+			// empty CSRF Token
+			body:           "csrfToken=",
+			wantHttpStatus: http.StatusBadRequest,
+		},
+		{
+			// valid CSRF Token
+			body:           "csrfToken=test-123",
+			wantHttpStatus: http.StatusSeeOther,
+		},
+	}
+
+	for _, test := range tests {
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest("POST", "/login", strings.NewReader(test.body))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		server.ServeHTTP(rr, req)
+		assert.Equal(t, test.wantHttpStatus, rr.Code)
+
+		if test.wantHttpStatus == http.StatusSeeOther {
+			assert.NotEmpty(t, rr.Result().Cookies()[0])
+		}
+	}
 }
 
 func TestHandleCallbackGet(t *testing.T) {
 	t.Parallel()
 
-	const validCallbackUrl = "/callback?code=testcode"
+	w := httptest.NewRecorder()
+	server.ServeHTTP(w, httptest.NewRequest("GET", "/callback", nil))
+	assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+}
+
+func TestHandleCallbackPost(t *testing.T) {
+	t.Parallel()
+
+	const (
+		validCallbackUrl = "/callback"
+		sessionCsrfToken = "test-csrf-123"
+		validAuthCode    = "test-code-123"
+	)
 	testNonce = "test-nonce-123"
 
 	tests := []struct {
 		url            string
+		body           string
 		nonce          string
 		wantHttpStatus int
 	}{
 		{
 			// success case
 			url:            validCallbackUrl,
+			body:           fmt.Sprintf("csrfToken=%s&code=%s", sessionCsrfToken, validAuthCode),
 			nonce:          testNonce,
 			wantHttpStatus: http.StatusOK,
 		},
 		{
 			// error in request URL
 			url:            "/callback?code=testcode&error=some-error",
+			body:           fmt.Sprintf("csrfToken=%s&code=%s", sessionCsrfToken, validAuthCode),
+			nonce:          testNonce,
+			wantHttpStatus: http.StatusBadRequest,
+		},
+		{
+			// no CSRF Token
+			url:            validCallbackUrl,
+			body:           fmt.Sprintf("code=%s", validAuthCode),
+			nonce:          testNonce,
+			wantHttpStatus: http.StatusBadRequest,
+		},
+		{
+			// empty CSRF Token
+			url:            validCallbackUrl,
+			body:           fmt.Sprintf("csrfToken=&code=%s", validAuthCode),
+			nonce:          testNonce,
+			wantHttpStatus: http.StatusBadRequest,
+		},
+		{
+			// POST and session CSRF Token does not match
+			url:            validCallbackUrl,
+			body:           fmt.Sprintf("csrfToken=%s&code=%s", "mismatched-csrf", validAuthCode),
 			nonce:          testNonce,
 			wantHttpStatus: http.StatusBadRequest,
 		},
 		{
 			// no authorization code
-			url:            "/callback",
+			url:            validCallbackUrl,
+			body:           fmt.Sprintf("csrfToken=%s", sessionCsrfToken),
 			nonce:          testNonce,
 			wantHttpStatus: http.StatusUnauthorized,
 		},
 		{
 			// empty authorization code
-			url:            "/callback?code=",
+			url:            validCallbackUrl,
+			body:           fmt.Sprintf("csrfToken=%s&code=", sessionCsrfToken),
 			nonce:          testNonce,
 			wantHttpStatus: http.StatusUnauthorized,
 		},
 		{
 			// nonce doesn't match expected
 			url:            validCallbackUrl,
-			nonce:          "invalid nonce",
+			body:           fmt.Sprintf("csrfToken=%s&code=%s", sessionCsrfToken, validAuthCode),
+			nonce:          "mismatched-nonce",
 			wantHttpStatus: http.StatusUnauthorized,
 		},
 	}
 
 	for _, test := range tests {
 		rr := httptest.NewRecorder()
-		req := httptest.NewRequest("GET", test.url, nil)
+		req := httptest.NewRequest("POST", test.url, strings.NewReader(test.body))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 		session := server.getSession(req)
+		session.Values["csrfToken"] = sessionCsrfToken
 		session.Values["nonce"] = test.nonce
 
 		server.ServeHTTP(rr, req)
