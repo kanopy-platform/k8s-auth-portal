@@ -51,6 +51,10 @@ type Server struct {
 	verifier            oidcIDTokenVerifier
 }
 
+type healthCheckResponse struct {
+	Status string `json:"status"`
+}
+
 type ServerFuncOpt func(*Server) error
 
 func New(opts ...ServerFuncOpt) (*Server, error) {
@@ -168,8 +172,8 @@ func writeJsonResponse(w http.ResponseWriter, httpResponse int, data interface{}
 		return
 	}
 
-	w.WriteHeader(httpResponse)
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(httpResponse) // do this after w.Header().Set() to keep "Content-Type": "application/json"
 	if _, err := w.Write(jsonResp); err != nil {
 		// cannot use logAndError() because it cannot do WriteHeader again
 		log.WithError(err).Error("failed to write JSON response")
@@ -341,9 +345,7 @@ func (s *Server) handleHealthCheck() http.HandlerFunc {
 			}).Error("oidc provider error")
 		}
 
-		response := struct {
-			Status string `json:"status"`
-		}{
+		response := &healthCheckResponse{
 			Status: status,
 		}
 

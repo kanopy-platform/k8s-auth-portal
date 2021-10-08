@@ -45,6 +45,17 @@ func (o *oidcProviderRoundTripper) RoundTrip(r *http.Request) (*http.Response, e
 	return resp, nil
 }
 
+type oidcProviderRoundTripperWithError struct{}
+
+func (o *oidcProviderRoundTripperWithError) RoundTrip(r *http.Request) (*http.Response, error) {
+	resp := &http.Response{
+		Status:     "503 Service Unavailable",
+		StatusCode: 503,
+	}
+
+	return resp, nil
+}
+
 func TestMain(m *testing.M) {
 	var err error
 
@@ -143,5 +154,42 @@ func TestHandleCallbackGet(t *testing.T) {
 
 		server.ServeHTTP(rr, req)
 		assert.Equal(t, test.wantHttpStatus, rr.Code)
+	}
+}
+
+func TestHandleHealthCheckGet(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		client           *http.Client
+		wantHealthStatus string
+		wantHttpStatus   int
+	}{
+		{
+			// success case
+			client:           &http.Client{Transport: &oidcProviderRoundTripper{}},
+			wantHealthStatus: "ok",
+			wantHttpStatus:   http.StatusOK,
+		},
+		{
+			// oidc provider returns error
+			client:           &http.Client{Transport: &oidcProviderRoundTripperWithError{}},
+			wantHealthStatus: "cannot connect to oidc provider. error: 503 Service Unavailable",
+			wantHttpStatus:   http.StatusBadGateway,
+		},
+	}
+
+	for _, test := range tests {
+		server.client = test.client
+		response := &healthCheckResponse{}
+
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/healthz", nil)
+		server.ServeHTTP(rr, req)
+		assert.Equal(t, test.wantHttpStatus, rr.Code)
+
+		err := json.Unmarshal(rr.Body.Bytes(), response)
+		assert.NoError(t, err)
+		assert.Equal(t, test.wantHealthStatus, response.Status)
 	}
 }
