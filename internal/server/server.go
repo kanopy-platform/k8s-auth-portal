@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"embed"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"net"
@@ -155,15 +156,25 @@ func (s *Server) ConfigureOpenID() error {
 	return nil
 }
 
-func (s *Server) routes() {
-	s.HandleFunc("/", s.handleRoot())
-	s.HandleFunc("/login", s.handleLogin()).Methods(http.MethodPost)
-	s.HandleFunc("/callback", s.handleCallback()).Methods(http.MethodGet)
-}
-
 func logAndError(w http.ResponseWriter, code int, err error, msg string) {
 	log.WithError(err).Error(msg)
 	http.Error(w, http.StatusText(code), code)
+}
+
+func writeJsonResponse(w http.ResponseWriter, httpResponse int, data interface{}) {
+	jsonResp, err := json.Marshal(data)
+	if err != nil {
+		logAndError(w, http.StatusInternalServerError, err, "error marshaling json")
+		return
+	}
+
+	w.WriteHeader(httpResponse)
+	w.Header().Set("Content-Type", "application/json")
+	if _, err := w.Write(jsonResp); err != nil {
+		// cannot use logAndError() because it cannot do WriteHeader again
+		log.WithError(err).Error("failed to write JSON response")
+		return
+	}
 }
 
 func (s *Server) getSession(r *http.Request) *sessions.Session {
@@ -174,6 +185,13 @@ func (s *Server) getSession(r *http.Request) *sessions.Session {
 	}
 
 	return session
+}
+
+func (s *Server) routes() {
+	s.HandleFunc("/", s.handleRoot())
+	s.HandleFunc("/login", s.handleLogin()).Methods(http.MethodPost)
+	s.HandleFunc("/callback", s.handleCallback()).Methods(http.MethodGet)
+	s.HandleFunc("/healthz", s.handleHealthCheck()).Methods(http.MethodGet)
 }
 
 func (s *Server) handleRoot() http.HandlerFunc {
@@ -293,5 +311,42 @@ func (s *Server) handleCallback() http.HandlerFunc {
 			logAndError(w, http.StatusInternalServerError, err, "error executing template")
 			return
 		}
+	}
+}
+
+func (s *Server) handleHealthCheck() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var oidcErr error
+		status := "ok"
+		httpStatus := http.StatusOK
+
+		oidcResp, oidcErr := s.client.Get(s.issuerURL.String() + "/healthz")
+		if oidcErr != nil {
+			status = fmt.Sprintf("cannot connect to oidc provider. error: %v", oidcErr)
+			httpStatus = http.StatusBadGateway
+		}
+		defer oidcResp.Body.Close()
+
+		if oidcErr == nil && oidcResp.StatusCode > 299 {
+			status = fmt.Sprintf("cannot connect to oidc provider. error: %v", oidcResp.Status)
+			oidcErr = fmt.Errorf("oidc provider error")
+			httpStatus = http.StatusBadGateway
+		}
+
+		if oidcErr != nil {
+			log.WithFields(log.Fields{
+				"issuerURL": s.issuerURL,
+				"oidcErr":   oidcErr,
+				"status":    status,
+			}).Error("oidc provider error")
+		}
+
+		response := struct {
+			Status string `json:"status"`
+		}{
+			Status: status,
+		}
+
+		writeJsonResponse(w, httpStatus, response)
 	}
 }
