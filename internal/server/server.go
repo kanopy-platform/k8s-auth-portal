@@ -173,9 +173,9 @@ func writeJsonResponse(w http.ResponseWriter, httpResponse int, data interface{}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(httpResponse) // do this after w.Header().Set() to keep "Content-Type": "application/json"
+	w.WriteHeader(httpResponse) // keep this after w.Header().Set() to keep "Content-Type": "application/json"
 	if _, err := w.Write(jsonResp); err != nil {
-		// cannot use logAndError() because it cannot do WriteHeader again
+		// cannot use logAndError() because it will write to header again
 		log.WithError(err).Error("failed to write JSON response")
 		return
 	}
