@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
@@ -320,35 +321,55 @@ func (s *Server) handleCallback() http.HandlerFunc {
 
 func (s *Server) handleHealthCheck() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var oidcErr error
-		status := "ok"
-		httpStatus := http.StatusOK
+		oidcResp, err := s.client.Get(s.issuerURL.String() + "/healthz")
+		if err != nil {
+			status := fmt.Sprintf("cannot connect to oidc provider. error: %v", err)
+			log.WithFields(log.Fields{
+				"issuerURL": s.issuerURL,
+				"err":       err,
+			}).Error(status)
 
-		oidcResp, oidcErr := s.client.Get(s.issuerURL.String() + "/healthz")
-		if oidcErr != nil {
-			status = fmt.Sprintf("cannot connect to oidc provider. error: %v", oidcErr)
-			httpStatus = http.StatusBadGateway
+			writeJsonResponse(w, http.StatusBadGateway, healthCheckResponse{Status: status})
+			return
 		}
 		defer oidcResp.Body.Close()
 
-		if oidcErr == nil && oidcResp.StatusCode > 299 {
-			status = fmt.Sprintf("cannot connect to oidc provider. error: %v", oidcResp.Status)
-			oidcErr = fmt.Errorf("oidc provider error")
-			httpStatus = http.StatusBadGateway
-		}
-
-		if oidcErr != nil {
+		bodyBytes, err := ioutil.ReadAll(oidcResp.Body)
+		if err != nil {
+			status := fmt.Sprintf("cannot read response body from oidc provider. error: %v", err)
 			log.WithFields(log.Fields{
-				"issuerURL": s.issuerURL,
-				"oidcErr":   oidcErr,
-				"status":    status,
-			}).Error("oidc provider error")
+				"issuerURL":   s.issuerURL,
+				"err":         err,
+				"HTTP status": oidcResp.Status,
+			}).Error(status)
+
+			writeJsonResponse(w, http.StatusBadGateway, healthCheckResponse{Status: status})
+			return
+		}
+		bodyString := string(bodyBytes)
+
+		if oidcResp.StatusCode > 299 {
+			status := fmt.Sprintf("oidc provider returned error in HTTP status code: %v", oidcResp.Status)
+			log.WithFields(log.Fields{
+				"issuerURL":         s.issuerURL,
+				"health-check body": bodyString,
+			}).Error(status)
+
+			writeJsonResponse(w, http.StatusBadGateway, healthCheckResponse{Status: status})
+			return
 		}
 
-		response := &healthCheckResponse{
-			Status: status,
+		if bodyString != "Health check passed" {
+			status := fmt.Sprintf("oidc provider returned unexpected health-check body: %v", bodyString)
+			log.WithFields(log.Fields{
+				"issuerURL":   s.issuerURL,
+				"HTTP status": oidcResp.Status,
+			}).Error(status)
+
+			writeJsonResponse(w, http.StatusBadGateway, healthCheckResponse{Status: status})
+			return
 		}
 
-		writeJsonResponse(w, httpStatus, response)
+		writeJsonResponse(w, http.StatusOK, healthCheckResponse{Status: "ok"})
 	}
 }

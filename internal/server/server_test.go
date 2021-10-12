@@ -45,12 +45,36 @@ func (o *oidcProviderRoundTripper) RoundTrip(r *http.Request) (*http.Response, e
 	return resp, nil
 }
 
-type oidcProviderRoundTripperWithError struct{}
+type healthzRoundTripper struct{}
 
-func (o *oidcProviderRoundTripperWithError) RoundTrip(r *http.Request) (*http.Response, error) {
+func (o *healthzRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
+	resp := &http.Response{
+		Status:     "200 OK",
+		StatusCode: 200,
+		Body:       io.NopCloser(strings.NewReader("Health check passed")),
+	}
+
+	return resp, nil
+}
+
+type healthzRoundTripperWithErrorStatus struct{}
+
+func (o *healthzRoundTripperWithErrorStatus) RoundTrip(r *http.Request) (*http.Response, error) {
 	resp := &http.Response{
 		Status:     "503 Service Unavailable",
 		StatusCode: 503,
+	}
+
+	return resp, nil
+}
+
+type healthzRoundTripperWithErrorBody struct{}
+
+func (o *healthzRoundTripperWithErrorBody) RoundTrip(r *http.Request) (*http.Response, error) {
+	resp := &http.Response{
+		Status:     "200 OK",
+		StatusCode: 200,
+		Body:       io.NopCloser(strings.NewReader("issue with dex")),
 	}
 
 	return resp, nil
@@ -167,14 +191,20 @@ func TestHandleHealthCheckGet(t *testing.T) {
 	}{
 		{
 			// success case
-			client:           &http.Client{Transport: &oidcProviderRoundTripper{}},
+			client:           &http.Client{Transport: &healthzRoundTripper{}},
 			wantHealthStatus: "ok",
 			wantHttpStatus:   http.StatusOK,
 		},
 		{
-			// oidc provider returns error
-			client:           &http.Client{Transport: &oidcProviderRoundTripperWithError{}},
-			wantHealthStatus: "cannot connect to oidc provider. error: 503 Service Unavailable",
+			// oidc provider returns error in HTTP status code
+			client:           &http.Client{Transport: &healthzRoundTripperWithErrorStatus{}},
+			wantHealthStatus: "oidc provider returned error in HTTP status code: 503 Service Unavailable",
+			wantHttpStatus:   http.StatusBadGateway,
+		},
+		{
+			// oidc provider returns error in body
+			client:           &http.Client{Transport: &healthzRoundTripperWithErrorBody{}},
+			wantHealthStatus: "oidc provider returned unexpected health-check body: issue with dex",
 			wantHttpStatus:   http.StatusBadGateway,
 		},
 	}
