@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -22,59 +23,57 @@ type providerJSON struct {
 	TokenURL string `json:"token_endpoint"`
 }
 
-type oidcProviderRoundTripper struct{}
+type oidcProviderRoundTripper struct {
+	statusCode int
+	status     string
+	bodyStr    string
+}
 
-func (o *oidcProviderRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
-	resp := &http.Response{
-		StatusCode: 200,
-	}
+func NewOidcProviderRoundTripper() *oidcProviderRoundTripper {
+	return &oidcProviderRoundTripper{}
+}
 
+func (o *oidcProviderRoundTripper) WithProviderInfo() *oidcProviderRoundTripper {
 	p := &providerJSON{
 		Issuer:   "https://dex.example.com",
 		AuthURL:  "https://dex.example.com/auth",
 		TokenURL: "https://dex.example.com/token",
 	}
-
 	body, err := json.Marshal(p)
 	if err != nil {
-		return nil, err
+		log.Fatalf("error marshalling JSON: %v", err)
 	}
 
-	resp.Body = io.NopCloser(strings.NewReader(string(body)))
-
-	return resp, nil
+	o.statusCode = 200
+	o.bodyStr = string(body)
+	return o
 }
 
-type healthzRoundTripper struct{}
-
-func (o *healthzRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
-	resp := &http.Response{
-		Status:     "200 OK",
-		StatusCode: 200,
-		Body:       io.NopCloser(strings.NewReader("Health check passed")),
-	}
-
-	return resp, nil
+func (o *oidcProviderRoundTripper) WithServiceUnavailable() *oidcProviderRoundTripper {
+	o.statusCode = 503
+	o.status = "503 Service Unavailable"
+	return o
 }
 
-type healthzRoundTripperWithErrorStatus struct{}
-
-func (o *healthzRoundTripperWithErrorStatus) RoundTrip(r *http.Request) (*http.Response, error) {
-	resp := &http.Response{
-		Status:     "503 Service Unavailable",
-		StatusCode: 503,
-	}
-
-	return resp, nil
+func (o *oidcProviderRoundTripper) WithResponseHealthCheckPassed() *oidcProviderRoundTripper {
+	o.statusCode = 200
+	o.status = "200 OK"
+	o.bodyStr = "Health check passed"
+	return o
 }
 
-type healthzRoundTripperWithErrorBody struct{}
+func (o *oidcProviderRoundTripper) WithResponseIssueWithDex() *oidcProviderRoundTripper {
+	o.statusCode = 200
+	o.status = "200 OK"
+	o.bodyStr = "issue with dex"
+	return o
+}
 
-func (o *healthzRoundTripperWithErrorBody) RoundTrip(r *http.Request) (*http.Response, error) {
+func (o *oidcProviderRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
 	resp := &http.Response{
-		Status:     "200 OK",
-		StatusCode: 200,
-		Body:       io.NopCloser(strings.NewReader("issue with dex")),
+		StatusCode: o.statusCode,
+		Status:     o.status,
+		Body:       io.NopCloser(strings.NewReader(string(o.bodyStr))),
 	}
 
 	return resp, nil
@@ -84,7 +83,7 @@ func TestMain(m *testing.M) {
 	var err error
 
 	client := &http.Client{
-		Transport: &oidcProviderRoundTripper{},
+		Transport: NewOidcProviderRoundTripper().WithProviderInfo(),
 	}
 
 	server, err = New(
@@ -191,20 +190,20 @@ func TestHandleHealthCheckGet(t *testing.T) {
 	}{
 		{
 			// success case
-			client:           &http.Client{Transport: &healthzRoundTripper{}},
+			client:           &http.Client{Transport: NewOidcProviderRoundTripper().WithResponseHealthCheckPassed()},
 			wantHealthStatus: "ok",
 			wantHttpStatus:   http.StatusOK,
 		},
 		{
 			// oidc provider returns error in HTTP status code
-			client:           &http.Client{Transport: &healthzRoundTripperWithErrorStatus{}},
-			wantHealthStatus: "oidc provider returned error in HTTP status code: 503 Service Unavailable",
+			client:           &http.Client{Transport: NewOidcProviderRoundTripper().WithServiceUnavailable()},
+			wantHealthStatus: fmt.Sprintf("oidc provider %v returned HTTP 503 Service Unavailable", server.issuerURL),
 			wantHttpStatus:   http.StatusBadGateway,
 		},
 		{
 			// oidc provider returns error in body
-			client:           &http.Client{Transport: &healthzRoundTripperWithErrorBody{}},
-			wantHealthStatus: "oidc provider returned unexpected health-check body: issue with dex",
+			client:           &http.Client{Transport: NewOidcProviderRoundTripper().WithResponseIssueWithDex()},
+			wantHealthStatus: fmt.Sprintf("oidc provider %v returned unexpected health check body", server.issuerURL),
 			wantHttpStatus:   http.StatusBadGateway,
 		},
 	}
