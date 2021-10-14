@@ -178,14 +178,14 @@ func (s *Server) getSession(r *http.Request) *sessions.Session {
 
 func (s *Server) handleRoot() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		csrfToken, err := random.SecureString(32)
+		state, err := random.SecureString(32)
 		if err != nil {
-			logAndError(w, http.StatusInternalServerError, err, "error generating random string for CSRF Token")
+			logAndError(w, http.StatusInternalServerError, err, "error generating random string for state")
 			return
 		}
 
 		data := map[string]interface{}{
-			"CSRFToken": csrfToken,
+			"State": state,
 		}
 
 		if err := s.template.ExecuteTemplate(w, "view_index.tmpl", data); err != nil {
@@ -212,22 +212,22 @@ func (s *Server) handleLogin() http.HandlerFunc {
 		// However, our app's RedirectURL is out-of-band and does not redirect to the callback
 		// handler. So there is no way to do "state" validation using the URL.
 		//
-		// Instead we generate and store a CSRF token as a hidden form field in index.html.
+		// Instead we generate and store a random state string as a hidden form field in index.html.
 		// Pass it into /login, which saves it in the session cookie.
-		// The /callback handler will verify the passed in CSRF token matches that from the session.
+		// The /callback handler will verify the passed in state matches that from the session.
 		// This achieves the equivalent functionality as using "state" in URL.
-		state, err := random.SecureString(32)
+		randomStr, err := random.SecureString(32)
 		if err != nil {
-			logAndError(w, http.StatusInternalServerError, err, "error generating random string for state")
+			logAndError(w, http.StatusInternalServerError, err, "error generating random string")
 			return
 		}
 
-		csrfToken := r.PostFormValue("csrfToken")
-		if csrfToken == "" {
-			logAndError(w, http.StatusBadRequest, fmt.Errorf("csrfToken empty or does not exist"), "invalid CSRF Token")
+		state := r.PostFormValue("state")
+		if state == "" {
+			logAndError(w, http.StatusBadRequest, fmt.Errorf("state empty or does not exist"), "invalid state")
 			return
 		}
-		session.Values["csrfToken"] = csrfToken
+		session.Values["state"] = state
 
 		// generate nonce
 		nonce, err := random.SecureString(32)
@@ -242,7 +242,7 @@ func (s *Server) handleLogin() http.HandlerFunc {
 			return
 		}
 
-		http.Redirect(w, r, s.oauth2Config.AuthCodeURL(state, oidc.Nonce(nonce)), http.StatusSeeOther)
+		http.Redirect(w, r, s.oauth2Config.AuthCodeURL(randomStr, oidc.Nonce(nonce)), http.StatusSeeOther)
 	}
 }
 
@@ -262,9 +262,9 @@ func (s *Server) handleCallback() http.HandlerFunc {
 		session := s.getSession(r)
 		oidcContext := oidc.ClientContext(r.Context(), s.client)
 
-		csrfToken := r.PostFormValue("csrfToken")
-		if csrfToken == "" || csrfToken != session.Values["csrfToken"] {
-			logAndError(w, http.StatusBadRequest, fmt.Errorf("expected: %v, got: %v", session.Values["csrfToken"], csrfToken), "invalid CSRF Token")
+		state := r.PostFormValue("state")
+		if state == "" || state != session.Values["state"] {
+			logAndError(w, http.StatusBadRequest, fmt.Errorf("expected: %v, got: %v", session.Values["state"], state), "invalid state")
 			return
 		}
 

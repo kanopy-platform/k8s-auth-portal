@@ -96,13 +96,13 @@ func TestHandleLoginPost(t *testing.T) {
 			wantHttpStatus: http.StatusBadRequest,
 		},
 		{
-			// empty CSRF Token
-			body:           "csrfToken=",
+			// empty state
+			body:           "state=",
 			wantHttpStatus: http.StatusBadRequest,
 		},
 		{
-			// valid CSRF Token
-			body:           "csrfToken=test-123",
+			// valid state
+			body:           "state=test-123",
 			wantHttpStatus: http.StatusSeeOther,
 		},
 	}
@@ -134,7 +134,7 @@ func TestHandleCallbackPost(t *testing.T) {
 
 	const (
 		validCallbackUrl = "/callback"
-		sessionCsrfToken = "test-csrf-123"
+		sessionState     = "test-state-123"
 		validAuthCode    = "test-code-123"
 	)
 	testNonce = "test-nonce-123"
@@ -148,56 +148,56 @@ func TestHandleCallbackPost(t *testing.T) {
 		{
 			// success case
 			url:            validCallbackUrl,
-			body:           fmt.Sprintf("csrfToken=%s&code=%s", sessionCsrfToken, validAuthCode),
+			body:           fmt.Sprintf("state=%s&code=%s", sessionState, validAuthCode),
 			nonce:          testNonce,
 			wantHttpStatus: http.StatusOK,
 		},
 		{
 			// error in request URL
 			url:            "/callback?code=testcode&error=some-error",
-			body:           fmt.Sprintf("csrfToken=%s&code=%s", sessionCsrfToken, validAuthCode),
+			body:           fmt.Sprintf("state=%s&code=%s", sessionState, validAuthCode),
 			nonce:          testNonce,
 			wantHttpStatus: http.StatusBadRequest,
 		},
 		{
-			// no CSRF Token
+			// no state
 			url:            validCallbackUrl,
 			body:           fmt.Sprintf("code=%s", validAuthCode),
 			nonce:          testNonce,
 			wantHttpStatus: http.StatusBadRequest,
 		},
 		{
-			// empty CSRF Token
+			// empty state
 			url:            validCallbackUrl,
-			body:           fmt.Sprintf("csrfToken=&code=%s", validAuthCode),
+			body:           fmt.Sprintf("state=&code=%s", validAuthCode),
 			nonce:          testNonce,
 			wantHttpStatus: http.StatusBadRequest,
 		},
 		{
-			// POST and session CSRF Token does not match
+			// POST and session state does not match
 			url:            validCallbackUrl,
-			body:           fmt.Sprintf("csrfToken=%s&code=%s", "mismatched-csrf", validAuthCode),
+			body:           fmt.Sprintf("state=%s&code=%s", "mismatched-state", validAuthCode),
 			nonce:          testNonce,
 			wantHttpStatus: http.StatusBadRequest,
 		},
 		{
 			// no authorization code
 			url:            validCallbackUrl,
-			body:           fmt.Sprintf("csrfToken=%s", sessionCsrfToken),
+			body:           fmt.Sprintf("state=%s", sessionState),
 			nonce:          testNonce,
 			wantHttpStatus: http.StatusUnauthorized,
 		},
 		{
 			// empty authorization code
 			url:            validCallbackUrl,
-			body:           fmt.Sprintf("csrfToken=%s&code=", sessionCsrfToken),
+			body:           fmt.Sprintf("state=%s&code=", sessionState),
 			nonce:          testNonce,
 			wantHttpStatus: http.StatusUnauthorized,
 		},
 		{
 			// nonce doesn't match expected
 			url:            validCallbackUrl,
-			body:           fmt.Sprintf("csrfToken=%s&code=%s", sessionCsrfToken, validAuthCode),
+			body:           fmt.Sprintf("state=%s&code=%s", sessionState, validAuthCode),
 			nonce:          "mismatched-nonce",
 			wantHttpStatus: http.StatusUnauthorized,
 		},
@@ -209,7 +209,7 @@ func TestHandleCallbackPost(t *testing.T) {
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 		session := server.getSession(req)
-		session.Values["csrfToken"] = sessionCsrfToken
+		session.Values["state"] = sessionState
 		session.Values["nonce"] = test.nonce
 
 		server.ServeHTTP(rr, req)
