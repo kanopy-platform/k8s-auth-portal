@@ -268,7 +268,7 @@ func (s *Server) handleCallback() http.HandlerFunc {
 			return
 		}
 
-		code := r.FormValue("code")
+		code := r.PostFormValue("code")
 		if code == "" {
 			logAndError(w, http.StatusUnauthorized, fmt.Errorf("authorization code empty"), "error in authorization code")
 			return
