@@ -18,7 +18,7 @@ func TestOptions(t *testing.T) {
 	t.Parallel()
 
 	client := &http.Client{
-		Transport: &oidcProviderRoundTripper{},
+		Transport: NewOidcProviderRoundTripper().WithProviderInfo(),
 	}
 
 	// Test with default parameters

@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -22,25 +23,58 @@ type providerJSON struct {
 	TokenURL string `json:"token_endpoint"`
 }
 
-type oidcProviderRoundTripper struct{}
+type oidcProviderRoundTripper struct {
+	statusCode int
+	status     string
+	bodyStr    string
+}
 
-func (o *oidcProviderRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
-	resp := &http.Response{
-		StatusCode: 200,
-	}
+func NewOidcProviderRoundTripper() *oidcProviderRoundTripper {
+	return &oidcProviderRoundTripper{}
+}
 
+func (o *oidcProviderRoundTripper) WithProviderInfo() *oidcProviderRoundTripper {
 	p := &providerJSON{
 		Issuer:   "https://dex.example.com",
 		AuthURL:  "https://dex.example.com/auth",
 		TokenURL: "https://dex.example.com/token",
 	}
-
 	body, err := json.Marshal(p)
 	if err != nil {
-		return nil, err
+		log.Fatalf("error marshalling JSON: %v", err)
 	}
 
-	resp.Body = io.NopCloser(strings.NewReader(string(body)))
+	o.statusCode = 200
+	o.bodyStr = string(body)
+	return o
+}
+
+func (o *oidcProviderRoundTripper) WithServiceUnavailable() *oidcProviderRoundTripper {
+	o.statusCode = 503
+	o.status = "503 Service Unavailable"
+	return o
+}
+
+func (o *oidcProviderRoundTripper) WithResponseHealthCheckPassed() *oidcProviderRoundTripper {
+	o.statusCode = 200
+	o.status = "200 OK"
+	o.bodyStr = "Health check passed"
+	return o
+}
+
+func (o *oidcProviderRoundTripper) WithResponseIssueWithDex() *oidcProviderRoundTripper {
+	o.statusCode = 200
+	o.status = "200 OK"
+	o.bodyStr = "issue with dex"
+	return o
+}
+
+func (o *oidcProviderRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
+	resp := &http.Response{
+		StatusCode: o.statusCode,
+		Status:     o.status,
+		Body:       io.NopCloser(strings.NewReader(string(o.bodyStr))),
+	}
 
 	return resp, nil
 }
@@ -49,7 +83,7 @@ func TestMain(m *testing.M) {
 	var err error
 
 	client := &http.Client{
-		Transport: &oidcProviderRoundTripper{},
+		Transport: NewOidcProviderRoundTripper().WithProviderInfo(),
 	}
 
 	server, err = New(
@@ -143,5 +177,48 @@ func TestHandleCallbackGet(t *testing.T) {
 
 		server.ServeHTTP(rr, req)
 		assert.Equal(t, test.wantHttpStatus, rr.Code)
+	}
+}
+
+func TestHandleHealthCheckGet(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		client           *http.Client
+		wantHealthStatus string
+		wantHttpStatus   int
+	}{
+		{
+			// success case
+			client:           &http.Client{Transport: NewOidcProviderRoundTripper().WithResponseHealthCheckPassed()},
+			wantHealthStatus: "ok",
+			wantHttpStatus:   http.StatusOK,
+		},
+		{
+			// oidc provider returns error in HTTP status code
+			client:           &http.Client{Transport: NewOidcProviderRoundTripper().WithServiceUnavailable()},
+			wantHealthStatus: fmt.Sprintf("oidc provider %v returned HTTP 503 Service Unavailable", server.issuerURL),
+			wantHttpStatus:   http.StatusBadGateway,
+		},
+		{
+			// oidc provider returns error in body
+			client:           &http.Client{Transport: NewOidcProviderRoundTripper().WithResponseIssueWithDex()},
+			wantHealthStatus: fmt.Sprintf("oidc provider %v returned unexpected health check body", server.issuerURL),
+			wantHttpStatus:   http.StatusBadGateway,
+		},
+	}
+
+	for _, test := range tests {
+		server.client = test.client
+		response := &healthCheckResponse{}
+
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/healthz", nil)
+		server.ServeHTTP(rr, req)
+		assert.Equal(t, test.wantHttpStatus, rr.Code)
+
+		err := json.Unmarshal(rr.Body.Bytes(), response)
+		assert.NoError(t, err)
+		assert.Equal(t, test.wantHealthStatus, response.Status)
 	}
 }
