@@ -6,8 +6,10 @@ import (
 	"crypto/x509"
 	"embed"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"html/template"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
@@ -48,6 +50,10 @@ type Server struct {
 	oauth2Config        oauth2ConfigProvider
 	client              *http.Client // OIDC client to support custom root CA certificates
 	verifier            oidcIDTokenVerifier
+}
+
+type healthCheckResponse struct {
+	Status string `json:"status"`
 }
 
 type ServerFuncOpt func(*Server) error
@@ -155,15 +161,24 @@ func (s *Server) ConfigureOpenID() error {
 	return nil
 }
 
-func (s *Server) routes() {
-	s.HandleFunc("/", s.handleRoot())
-	s.HandleFunc("/login", s.handleLogin()).Methods(http.MethodPost)
-	s.HandleFunc("/callback", s.handleCallback()).Methods(http.MethodPost)
-}
-
 func logAndError(w http.ResponseWriter, code int, err error, msg string) {
 	log.WithError(err).Error(msg)
 	http.Error(w, http.StatusText(code), code)
+}
+
+func writeJsonResponse(w http.ResponseWriter, httpResponse int, data interface{}) {
+	jsonResp, err := json.Marshal(data)
+	if err != nil {
+		logAndError(w, http.StatusInternalServerError, err, "error marshaling json")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(httpResponse) // keep this after w.Header().Set() to keep "Content-Type": "application/json"
+	if _, err := w.Write(jsonResp); err != nil {
+		logAndError(w, http.StatusInternalServerError, err, "failed to write JSON response")
+		return
+	}
 }
 
 func (s *Server) getSession(r *http.Request) *sessions.Session {
@@ -174,6 +189,13 @@ func (s *Server) getSession(r *http.Request) *sessions.Session {
 	}
 
 	return session
+}
+
+func (s *Server) routes() {
+	s.HandleFunc("/", s.handleRoot())
+	s.HandleFunc("/login", s.handleLogin()).Methods(http.MethodPost)
+	s.HandleFunc("/callback", s.handleCallback()).Methods(http.MethodPost)
+	s.HandleFunc("/healthz", s.handleHealthCheck()).Methods(http.MethodGet)
 }
 
 func (s *Server) handleRoot() http.HandlerFunc {
@@ -332,5 +354,63 @@ func (s *Server) handleCallback() http.HandlerFunc {
 			logAndError(w, http.StatusInternalServerError, err, "error executing template")
 			return
 		}
+	}
+}
+
+func (s *Server) handleHealthCheck() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		const errPrefix = "/healthz: "
+
+		oidcResp, err := s.client.Get(s.issuerURL.String() + "/healthz")
+		if err != nil {
+			status := fmt.Sprintf("cannot connect to %v", s.issuerURL)
+			log.WithFields(log.Fields{
+				"issuerURL": s.issuerURL,
+				"err":       err,
+			}).Error(errPrefix + status)
+
+			writeJsonResponse(w, http.StatusBadGateway, healthCheckResponse{Status: status})
+			return
+		}
+		defer oidcResp.Body.Close()
+
+		bodyBytes, err := ioutil.ReadAll(oidcResp.Body)
+		if err != nil {
+			status := fmt.Sprintf("cannot read response body from %v", s.issuerURL)
+			log.WithFields(log.Fields{
+				"issuerURL":   s.issuerURL,
+				"err":         err,
+				"HTTP status": oidcResp.Status,
+			}).Error(errPrefix + status)
+
+			writeJsonResponse(w, http.StatusBadGateway, healthCheckResponse{Status: status})
+			return
+		}
+		bodyString := string(bodyBytes)
+
+		if oidcResp.StatusCode > 299 {
+			status := fmt.Sprintf("oidc provider %v returned HTTP %v", s.issuerURL, oidcResp.Status)
+			log.WithFields(log.Fields{
+				"issuerURL":             s.issuerURL,
+				"oidc healthz response": bodyString,
+			}).Error(errPrefix + status)
+
+			writeJsonResponse(w, http.StatusBadGateway, healthCheckResponse{Status: status})
+			return
+		}
+
+		if bodyString != "Health check passed" {
+			status := fmt.Sprintf("oidc provider %v returned unexpected health check body", s.issuerURL)
+			log.WithFields(log.Fields{
+				"issuerURL":             s.issuerURL,
+				"HTTP status":           oidcResp.Status,
+				"oidc healthz response": bodyString,
+			}).Error(errPrefix + status)
+
+			writeJsonResponse(w, http.StatusBadGateway, healthCheckResponse{Status: status})
+			return
+		}
+
+		writeJsonResponse(w, http.StatusOK, healthCheckResponse{Status: "ok"})
 	}
 }
