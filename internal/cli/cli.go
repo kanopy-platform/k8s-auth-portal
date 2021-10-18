@@ -30,7 +30,7 @@ func NewRootCommand() *cobra.Command {
 	cmd.PersistentFlags().String("api-url", "https://api.example.com", "kubernetes API URL")
 	cmd.PersistentFlags().String("issuer-url", "https://dex.example.com", "oidc issuer URL")
 	cmd.PersistentFlags().String("cluster-ca-filepath", "", "cluster CA certificate filepath")
-	cmd.PersistentFlags().String("kubectl-client-secret-filepath", "", "path to public odic client secret")
+	cmd.PersistentFlags().String("kubectl-client-secret", "", "public odic client secret")
 
 	return cmd
 }
@@ -65,7 +65,7 @@ func getServerOptions() []server.ServerFuncOpt {
 		server.WithAPIServerURL(viper.GetString("api-url")),
 		server.WithIssuerURL(viper.GetString("issuer-url")),
 		server.WithClusterCA(viper.GetString("cluster-ca-filepath")),
-		server.WithKubectlClientSecret(viper.GetString("kubectl-client-secret-filepath")),
+		server.WithKubectlClientSecret(viper.GetString("kubectl-client-secret")),
 	}
 
 	return opts

@@ -90,14 +90,10 @@ func WithClusterCA(filePath string) ServerFuncOpt {
 	}
 }
 
-func WithKubectlClientSecret(filePath string) ServerFuncOpt {
+func WithKubectlClientSecret(secret string) ServerFuncOpt {
 	return func(s *Server) error {
-		if filePath != "" {
-			data, err := os.ReadFile(filePath)
-			if err != nil {
-				return err
-			}
-			s.kubectlClientSecret = string(data)
+		if secret != "" {
+			s.kubectlClientSecret = secret
 		}
 
 		return nil

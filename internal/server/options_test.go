@@ -57,11 +57,6 @@ func TestOptions(t *testing.T) {
 	crtData, err := os.ReadFile(testCrtPath)
 	assert.NoError(t, err)
 
-	const testSecretPath = "testdata/test-secret"
-	secretByteData, err := os.ReadFile(testSecretPath)
-	assert.NoError(t, err)
-	wantSecret := string(secretByteData)
-
 	s, err = New(
 		WithSessionName("test"),
 		WithSessionSecret("test"),
@@ -70,7 +65,7 @@ func TestOptions(t *testing.T) {
 		WithExtraScopes("claim"),
 		WithClusterCA(testCrtPath),
 		WithKubectlClientID("test"),
-		WithKubectlClientSecret(testSecretPath),
+		WithKubectlClientSecret("test-secret"),
 		WithHTTPClient(client),
 	)
 	assert.NoError(t, err)
@@ -81,7 +76,7 @@ func TestOptions(t *testing.T) {
 	assert.Equal(t, wantIssuerURL, s.issuerURL)
 	assert.Equal(t, base64.StdEncoding.EncodeToString([]byte(crtData)), s.clusterCA)
 	assert.Equal(t, "test", s.kubectlClientID)
-	assert.Equal(t, wantSecret, s.kubectlClientSecret)
+	assert.Equal(t, "test-secret", s.kubectlClientSecret)
 	assert.Len(t, s.scopes, 6)
 
 	// Test invalid options
@@ -101,11 +96,6 @@ func TestOptions(t *testing.T) {
 		{
 			opts: []ServerFuncOpt{
 				WithClusterCA("testdata/pathnotfound"),
-			},
-		},
-		{
-			opts: []ServerFuncOpt{
-				WithKubectlClientSecret("testdata/pathnotfound"),
 			},
 		},
 	}

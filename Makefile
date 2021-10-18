@@ -18,11 +18,10 @@ docker: ## Build local development docker image with cached go modules, builds, 
 docker-snyk: ## Run local snyk scan, SNYK_TOKEN environment variable must be set
 	@docker run --rm -e SNYK_TOKEN -w /go/src/$(GO_MODULE) -v $(shell pwd):/go/src/$(GO_MODULE):delegated snyk/snyk:golang
 
-.PHONY: minikube
-minikube: ## Build and publish local development docker image
-minikube: docker
-	@docker tag $(CMD_NAME):latest $(LOCAL_DOCKER_REGISTRY)/$(CMD_NAME):latest
-	@docker push $(LOCAL_DOCKER_REGISTRY)/$(CMD_NAME):latest
+.PHONY: docker-run
+docker-run: ## Build and run the application in a local docker container
+docker-run: docker
+	@docker run -p $(DEFAULT_APP_PORT):$(DEFAULT_APP_PORT) $(CMD_NAME):latest --cluster-ca-filepath test.crt --session-secret test --kubectl-client-secret replace_this_public_client_secret
 
 .PHONY: help
 help:
