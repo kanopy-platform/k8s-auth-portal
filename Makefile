@@ -1,6 +1,5 @@
 GO_MODULE := $(shell git config --get remote.origin.url | grep -o 'github\.com[:/][^.]*' | tr ':' '/')
 CMD_NAME := $(shell basename ${GO_MODULE})
-LOCAL_DOCKER_REGISTRY := registry.example.com
 DEFAULT_APP_PORT ?= 8080
 
 RUN ?= .*
