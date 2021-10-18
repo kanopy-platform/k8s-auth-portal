@@ -3,21 +3,8 @@
 OIDC auth portal for Kubernetes clusters.
 
 
-## minikube Installation
+## Local testing
 
-Make image and push to local repository
+Build and run the application in a local docker container
 
-    make minikube
-
-Create helm release
-
-    helm upgrade --install \
-      --namespace kube-system \
-      --values=./environments/minikube.yaml \
-      auth mongodb/web-app
-
-Access app via https://auth.example.com
-
-Uninstall app
-
-    helm uninstall auth --namespace kube-system
+    make docker-run
