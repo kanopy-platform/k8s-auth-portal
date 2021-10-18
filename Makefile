@@ -1,5 +1,6 @@
 GO_MODULE := $(shell git config --get remote.origin.url | grep -o 'github\.com[:/][^.]*' | tr ':' '/')
 CMD_NAME := $(shell basename ${GO_MODULE})
+LOCAL_DOCKER_REGISTRY := registry.example.com
 DEFAULT_APP_PORT ?= 8080
 
 RUN ?= .*
@@ -11,20 +12,17 @@ test: ## Run tests in local environment
 
 .PHONY: docker
 docker: ## Build local development docker image with cached go modules, builds, and tests
-	@docker build -f build/Dockerfile-test -t $(CMD_NAME)-test:latest .
-
-.PHONY: docker-test
-docker-test: ## Run tests using local development docker image
-	@docker run -v $(shell pwd):/go/src/$(GO_MODULE):delegated $(CMD_NAME)-test make test RUN=$(RUN) PKG=$(PKG)
+	@docker build -t $(CMD_NAME):latest .
 
 .PHONY: docker-snyk
 docker-snyk: ## Run local snyk scan, SNYK_TOKEN environment variable must be set
 	@docker run --rm -e SNYK_TOKEN -w /go/src/$(GO_MODULE) -v $(shell pwd):/go/src/$(GO_MODULE):delegated snyk/snyk:golang
 
-.PHONY: docker-run
-docker-run: ## Build and run the application in a local docker container
-	@docker build -t $(CMD_NAME):latest .
-	@docker run -p ${DEFAULT_APP_PORT}:${DEFAULT_APP_PORT} $(CMD_NAME):latest
+.PHONY: minikube
+minikube: ## Build and publish local development docker image
+minikube: docker
+	@docker tag $(CMD_NAME):latest $(LOCAL_DOCKER_REGISTRY)/$(CMD_NAME):latest
+	@docker push $(LOCAL_DOCKER_REGISTRY)/$(CMD_NAME):latest
 
 .PHONY: help
 help:

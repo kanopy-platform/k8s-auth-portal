@@ -1,0 +1,15 @@
+---
+replicaCount: 1
+ingress:
+  enabled: true
+  hosts:
+    - auth.example.com
+image:
+  repository: registry.example.com/k8s-auth-portal
+  tag: latest
+command: [
+  "/app",
+  "--session-secret", "test",
+  "--cluster-ca-filepath", "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt",
+  "--kubectl-client-secret-filepath", "test-secret",
+]
