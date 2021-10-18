@@ -286,7 +286,7 @@ func (s *Server) handleCallback() http.HandlerFunc {
 
 		state := r.PostFormValue("state")
 		if state == "" || state != session.Values["state"] {
-			logAndError(w, http.StatusBadRequest, fmt.Errorf("expected: %v, got: %v", session.Values["state"], state), "invalid state")
+			logAndError(w, http.StatusBadRequest, fmt.Errorf("POST form and session state values do not match"), "invalid state")
 			return
 		}
 
