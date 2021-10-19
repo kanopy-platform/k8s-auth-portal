@@ -20,8 +20,14 @@ docker-snyk: ## Run local snyk scan, SNYK_TOKEN environment variable must be set
 .PHONY: docker-run
 docker-run: ## Build and run the application in a local docker container
 docker-run: docker
-	@docker run -p $(DEFAULT_APP_PORT):$(DEFAULT_APP_PORT) -v $(HOME)/.minikube/ca.crt:/test-files/ca.crt $(CMD_NAME):latest \
-		--cluster-ca-filepath /test-files/ca.crt --session-secret test --kubectl-client-secret replace_this_public_client_secret
+	@docker run -p $(DEFAULT_APP_PORT):$(DEFAULT_APP_PORT) \
+		-v $(HOME)/.minikube/ca.crt:/test-files/ca.crt \
+		-v $(PWD)/internal/server/testdata/session-secret:/etc/session-secret \
+		-v $(PWD)/internal/server/testdata/client-secret:/etc/client-secret \
+		$(CMD_NAME):latest \
+		--cluster-ca-filepath /test-files/ca.crt \
+		--session-secret-filepath /etc/session-secret \
+		--kubectl-client-secret-filepath /etc/client-secret
 
 .PHONY: help
 help:

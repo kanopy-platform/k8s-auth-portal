@@ -24,13 +24,13 @@ func NewRootCommand() *cobra.Command {
 	cmd.PersistentFlags().String("log-level", "info", "Configure log level")
 	cmd.PersistentFlags().String("listen-address", ":8080", "Server listen address")
 	cmd.PersistentFlags().String("session-name", "k8s-auth-portal-session", "session cookie name")
-	cmd.PersistentFlags().String("session-secret", "", "session secret")
+	cmd.PersistentFlags().String("session-secret-filepath", "", "path to session secret")
 	cmd.PersistentFlags().String("kubectl-client-id", "kubectl", "public oidc client-id for kubectl")
 	cmd.PersistentFlags().StringSlice("scope", []string{}, "extra oidc scope claims")
 	cmd.PersistentFlags().String("api-url", "https://api.example.com", "kubernetes API URL")
 	cmd.PersistentFlags().String("issuer-url", "https://dex.example.com", "oidc issuer URL")
 	cmd.PersistentFlags().String("cluster-ca-filepath", "", "cluster CA certificate filepath")
-	cmd.PersistentFlags().String("kubectl-client-secret", "", "public odic client secret")
+	cmd.PersistentFlags().String("kubectl-client-secret-filepath", "", "path to public odic client secret")
 
 	return cmd
 }
@@ -59,13 +59,13 @@ func (c *RootCommand) persistentPreRunE(cmd *cobra.Command, args []string) error
 func getServerOptions() []server.ServerFuncOpt {
 	opts := []server.ServerFuncOpt{
 		server.WithSessionName(viper.GetString("session-name")),
-		server.WithSessionSecret(viper.GetString("session-secret")),
+		server.WithSessionSecret(viper.GetString("session-secret-filepath")),
 		server.WithKubectlClientID(viper.GetString("kubectl-client-id")),
 		server.WithExtraScopes(viper.GetStringSlice("scope")...),
 		server.WithAPIServerURL(viper.GetString("api-url")),
 		server.WithIssuerURL(viper.GetString("issuer-url")),
 		server.WithClusterCA(viper.GetString("cluster-ca-filepath")),
-		server.WithKubectlClientSecret(viper.GetString("kubectl-client-secret")),
+		server.WithKubectlClientSecret(viper.GetString("kubectl-client-secret-filepath")),
 	}
 
 	return opts
