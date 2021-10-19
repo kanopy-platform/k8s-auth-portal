@@ -11,11 +11,7 @@ test: ## Run tests in local environment
 
 .PHONY: docker
 docker: ## Build local development docker image with cached go modules, builds, and tests
-	@docker build -f build/Dockerfile-test -t $(CMD_NAME)-test:latest .
-
-.PHONY: docker-test
-docker-test: ## Run tests using local development docker image
-	@docker run -v $(shell pwd):/go/src/$(GO_MODULE):delegated $(CMD_NAME)-test make test RUN=$(RUN) PKG=$(PKG)
+	@docker build -t $(CMD_NAME):latest .
 
 .PHONY: docker-snyk
 docker-snyk: ## Run local snyk scan, SNYK_TOKEN environment variable must be set
@@ -23,8 +19,15 @@ docker-snyk: ## Run local snyk scan, SNYK_TOKEN environment variable must be set
 
 .PHONY: docker-run
 docker-run: ## Build and run the application in a local docker container
-	@docker build -t $(CMD_NAME):latest .
-	@docker run -p ${DEFAULT_APP_PORT}:${DEFAULT_APP_PORT} $(CMD_NAME):latest
+docker-run: docker
+	@docker run -p $(DEFAULT_APP_PORT):$(DEFAULT_APP_PORT) \
+		-v $(HOME)/.minikube/ca.crt:/test-files/ca.crt \
+		-v $(PWD)/internal/server/testdata/session-secret:/etc/session-secret \
+		-v $(PWD)/internal/server/testdata/client-secret:/etc/client-secret \
+		$(CMD_NAME):latest \
+		--cluster-ca-filepath /test-files/ca.crt \
+		--session-secret-filepath /etc/session-secret \
+		--kubectl-client-secret-filepath /etc/client-secret
 
 .PHONY: help
 help:

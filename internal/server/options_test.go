@@ -14,6 +14,15 @@ type optTest struct {
 	opts []ServerFuncOpt
 }
 
+func readFileToString(filePath string) (string, error) {
+	byteData, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", err
+	}
+
+	return string(byteData), nil
+}
+
 func TestOptions(t *testing.T) {
 	t.Parallel()
 
@@ -57,31 +66,34 @@ func TestOptions(t *testing.T) {
 	crtData, err := os.ReadFile(testCrtPath)
 	assert.NoError(t, err)
 
-	const testSecretPath = "testdata/test-secret"
-	secretByteData, err := os.ReadFile(testSecretPath)
+	const testSessionSecretPath = "testdata/session-secret"
+	wantSessionSecret, err := readFileToString(testSessionSecretPath)
 	assert.NoError(t, err)
-	wantSecret := string(secretByteData)
+
+	const testClientSecretPath = "testdata/client-secret"
+	wantClientSecret, err := readFileToString(testClientSecretPath)
+	assert.NoError(t, err)
 
 	s, err = New(
 		WithSessionName("test"),
-		WithSessionSecret("test"),
+		WithSessionSecret(testSessionSecretPath),
 		WithAPIServerURL(testAPIServerURL),
 		WithIssuerURL(testIssuerURL),
 		WithExtraScopes("claim"),
 		WithClusterCA(testCrtPath),
 		WithKubectlClientID("test"),
-		WithKubectlClientSecret(testSecretPath),
+		WithKubectlClientSecret(testClientSecretPath),
 		WithHTTPClient(client),
 	)
 	assert.NoError(t, err)
 	assert.NotNil(t, s.client)
 	assert.Equal(t, "test", s.sessionName)
-	assert.Equal(t, "test", s.sessionSecret)
+	assert.Equal(t, wantSessionSecret, s.sessionSecret)
 	assert.Equal(t, wantAPIServerURL, s.apiServerURL)
 	assert.Equal(t, wantIssuerURL, s.issuerURL)
 	assert.Equal(t, base64.StdEncoding.EncodeToString([]byte(crtData)), s.clusterCA)
 	assert.Equal(t, "test", s.kubectlClientID)
-	assert.Equal(t, wantSecret, s.kubectlClientSecret)
+	assert.Equal(t, wantClientSecret, s.kubectlClientSecret)
 	assert.Len(t, s.scopes, 6)
 
 	// Test invalid options
@@ -103,6 +115,13 @@ func TestOptions(t *testing.T) {
 				WithClusterCA("testdata/pathnotfound"),
 			},
 		},
+
+		{
+			opts: []ServerFuncOpt{
+				WithSessionSecret("testdata/pathnotfound"),
+			},
+		},
+
 		{
 			opts: []ServerFuncOpt{
 				WithKubectlClientSecret("testdata/pathnotfound"),
