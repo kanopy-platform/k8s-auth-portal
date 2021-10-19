@@ -194,13 +194,23 @@ func (s *Server) getSession(r *http.Request) *sessions.Session {
 func (s *Server) routes() {
 	s.HandleFunc("/", s.handleRoot())
 	s.HandleFunc("/login", s.handleLogin()).Methods(http.MethodPost)
-	s.HandleFunc("/callback", s.handleCallback()).Methods(http.MethodGet)
+	s.HandleFunc("/callback", s.handleCallback()).Methods(http.MethodPost)
 	s.HandleFunc("/healthz", s.handleHealthCheck()).Methods(http.MethodGet)
 }
 
 func (s *Server) handleRoot() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if err := s.template.ExecuteTemplate(w, "view_index.tmpl", nil); err != nil {
+		state, err := random.SecureString(32)
+		if err != nil {
+			logAndError(w, http.StatusInternalServerError, err, "error generating random string for state")
+			return
+		}
+
+		data := map[string]interface{}{
+			"State": state,
+		}
+
+		if err := s.template.ExecuteTemplate(w, "view_index.tmpl", data); err != nil {
 			logAndError(w, http.StatusInternalServerError, err, "error executing template")
 			return
 		}
@@ -209,18 +219,37 @@ func (s *Server) handleRoot() http.HandlerFunc {
 
 func (s *Server) handleLogin() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := s.getSession(r)
-
-		// Normally this randomStr would be a state, and saved in session.Values["state"].
-		// Then in handleCallback() check the state in URL matches the session.Values["state"].
-		// However, our app does not do the full login -> redirect -> callback loop.
-		// The user hits /login, copies code, goes back to root page, and hits /callback.
-		// So there is no way to pass a state in the URL between the login and callback.
-		randomStr, err := random.SecureString(32)
-		if err != nil {
-			logAndError(w, http.StatusInternalServerError, err, "error generating random string for state")
+		if err := r.ParseForm(); err != nil {
+			logAndError(w, http.StatusInternalServerError, err, "error parsing form")
 			return
 		}
+
+		session := s.getSession(r)
+
+		// CSRF attack prevention:
+		// In normal OIDC flow, login -> redirect -> callback, a state would be passed into
+		// the AuthCodeURL and saved in the session. After redirect, the callback handler would
+		// check that the state in the URL matches the state stored in the session.
+		//
+		// However, our app's RedirectURL is out-of-band and does not redirect to the callback
+		// handler. So there is no way to do "state" validation using the URL.
+		//
+		// Instead we generate and store a random state string as a hidden form field in index.html.
+		// Pass it into /login, which saves it in the session cookie.
+		// The /callback handler will verify the passed in state matches that from the session.
+		// This achieves the equivalent functionality as using "state" in URL.
+		randomStr, err := random.SecureString(32)
+		if err != nil {
+			logAndError(w, http.StatusInternalServerError, err, "error generating random string")
+			return
+		}
+
+		state := r.PostFormValue("state")
+		if state == "" {
+			logAndError(w, http.StatusBadRequest, fmt.Errorf("state empty or does not exist"), "invalid state")
+			return
+		}
+		session.Values["state"] = state
 
 		// generate nonce
 		nonce, err := random.SecureString(32)
@@ -241,6 +270,11 @@ func (s *Server) handleLogin() http.HandlerFunc {
 
 func (s *Server) handleCallback() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			logAndError(w, http.StatusInternalServerError, err, "error parsing form")
+			return
+		}
+
 		// handle requests that contain an error
 		if err := r.URL.Query().Get("error"); err != "" {
 			logAndError(w, http.StatusBadRequest, fmt.Errorf(err+": "+r.URL.Query().Get("error_description")), "error in request")
@@ -250,8 +284,13 @@ func (s *Server) handleCallback() http.HandlerFunc {
 		session := s.getSession(r)
 		oidcContext := oidc.ClientContext(r.Context(), s.client)
 
-		// handle requests without an authorization code
-		code := r.URL.Query().Get("code")
+		state := r.PostFormValue("state")
+		if state == "" || state != session.Values["state"] {
+			logAndError(w, http.StatusBadRequest, fmt.Errorf("POST form and session state values do not match"), "invalid state")
+			return
+		}
+
+		code := r.PostFormValue("code")
 		if code == "" {
 			logAndError(w, http.StatusUnauthorized, fmt.Errorf("authorization code empty"), "error in authorization code")
 			return
