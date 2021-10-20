@@ -16,10 +16,14 @@ func WithSessionName(name string) ServerFuncOpt {
 	}
 }
 
-func WithSessionSecret(secret string) ServerFuncOpt {
+func WithSessionSecret(filePath string) ServerFuncOpt {
 	return func(s *Server) error {
-		if secret != "" {
-			s.sessionSecret = secret
+		if filePath != "" {
+			data, err := os.ReadFile(filePath)
+			if err != nil {
+				return err
+			}
+			s.sessionSecret = string(data)
 		}
 
 		return nil
