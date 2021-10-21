@@ -79,6 +79,14 @@ func (o *oidcProviderRoundTripper) RoundTrip(r *http.Request) (*http.Response, e
 	return resp, nil
 }
 
+func hasCommonHeaders(header http.Header) bool {
+	if v := header.Get("X-Frame-Options"); v != "DENY" {
+		return false
+	}
+
+	return true
+}
+
 func TestMain(m *testing.M) {
 	var err error
 
@@ -106,6 +114,7 @@ func TestHandleRoot(t *testing.T) {
 	w := httptest.NewRecorder()
 	server.ServeHTTP(w, httptest.NewRequest("GET", "/", nil))
 	assert.Equal(t, http.StatusOK, w.Code)
+	assert.True(t, hasCommonHeaders(w.Header()))
 }
 
 func TestHandleLoginGet(t *testing.T) {
@@ -147,6 +156,7 @@ func TestHandleLoginPost(t *testing.T) {
 
 		server.ServeHTTP(rr, req)
 		assert.Equal(t, test.wantHttpStatus, rr.Code)
+		assert.True(t, hasCommonHeaders(rr.Header()))
 
 		if test.wantHttpStatus == http.StatusSeeOther {
 			assert.NotEmpty(t, rr.Result().Cookies()[0])
@@ -247,6 +257,7 @@ func TestHandleCallbackPost(t *testing.T) {
 
 		server.ServeHTTP(rr, req)
 		assert.Equal(t, test.wantHttpStatus, rr.Code)
+		assert.True(t, hasCommonHeaders(rr.Header()))
 	}
 }
 
@@ -286,6 +297,8 @@ func TestHandleHealthCheckGet(t *testing.T) {
 		req := httptest.NewRequest("GET", "/healthz", nil)
 		server.ServeHTTP(rr, req)
 		assert.Equal(t, test.wantHttpStatus, rr.Code)
+		assert.True(t, hasCommonHeaders(rr.Header()))
+		assert.Equal(t, "application/json; charset=utf-8", rr.Header().Get("Content-Type"))
 
 		err := json.Unmarshal(rr.Body.Bytes(), response)
 		assert.NoError(t, err)
