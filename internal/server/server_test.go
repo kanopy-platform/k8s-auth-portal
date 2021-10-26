@@ -79,11 +79,25 @@ func (o *oidcProviderRoundTripper) RoundTrip(r *http.Request) (*http.Response, e
 	return resp, nil
 }
 
-func checkResponseHeaders(t *testing.T, headers http.Header) {
+func checkResponseHeadersSecurity(t *testing.T, headers http.Header) {
 	for header, value := range server.reponseHeaders {
 		if actual := headers.Get(header); actual != value {
 			t.Errorf("response header %q: expected %q, got %q", header, value, actual)
 		}
+	}
+}
+
+func checkCookieSecurity(t *testing.T, cookie *http.Cookie) {
+	assert.True(t, cookie.Secure)
+	assert.True(t, cookie.HttpOnly)
+	assert.Equal(t, http.SameSiteStrictMode, cookie.SameSite)
+}
+
+func checkSecurityParameters(t *testing.T, rr *httptest.ResponseRecorder) {
+	checkResponseHeadersSecurity(t, rr.Header())
+
+	for _, cookie := range rr.Result().Cookies() {
+		checkCookieSecurity(t, cookie)
 	}
 }
 
@@ -114,7 +128,7 @@ func TestHandleRoot(t *testing.T) {
 	w := httptest.NewRecorder()
 	server.ServeHTTP(w, httptest.NewRequest("GET", "/", nil))
 	assert.Equal(t, http.StatusOK, w.Code)
-	checkResponseHeaders(t, w.Header())
+	checkSecurityParameters(t, w)
 }
 
 func TestHandleLoginGet(t *testing.T) {
@@ -156,7 +170,7 @@ func TestHandleLoginPost(t *testing.T) {
 
 		server.ServeHTTP(rr, req)
 		assert.Equal(t, test.wantHttpStatus, rr.Code)
-		checkResponseHeaders(t, rr.Header())
+		checkSecurityParameters(t, rr)
 
 		if test.wantHttpStatus == http.StatusSeeOther {
 			assert.NotEmpty(t, rr.Result().Cookies()[0])
@@ -257,7 +271,7 @@ func TestHandleCallbackPost(t *testing.T) {
 
 		server.ServeHTTP(rr, req)
 		assert.Equal(t, test.wantHttpStatus, rr.Code)
-		checkResponseHeaders(t, rr.Header())
+		checkSecurityParameters(t, rr)
 	}
 }
 
@@ -297,7 +311,7 @@ func TestHandleHealthCheckGet(t *testing.T) {
 		req := httptest.NewRequest("GET", "/healthz", nil)
 		server.ServeHTTP(rr, req)
 		assert.Equal(t, test.wantHttpStatus, rr.Code)
-		checkResponseHeaders(t, rr.Header())
+		checkSecurityParameters(t, rr)
 		assert.Equal(t, "application/json; charset=utf-8", rr.Header().Get("Content-Type"))
 
 		err := json.Unmarshal(rr.Body.Bytes(), response)

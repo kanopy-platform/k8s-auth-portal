@@ -94,6 +94,10 @@ func New(opts ...ServerFuncOpt) (*Server, error) {
 
 	// configure server
 	s.cookies = sessions.NewCookieStore([]byte(s.sessionSecret))
+	s.cookies.Options.Secure = true
+	s.cookies.Options.HttpOnly = true
+	s.cookies.Options.SameSite = http.SameSiteStrictMode
+
 	if err := s.ConfigureOpenID(); err != nil {
 		return nil, err
 	}
