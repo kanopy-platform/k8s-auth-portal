@@ -39,6 +39,7 @@ type Server struct {
 	*mux.Router
 	template            *template.Template
 	cookies             *sessions.CookieStore
+	reponseHeaders      map[string]string
 	sessionName         string
 	sessionSecret       string
 	apiServerURL        *url.URL
@@ -93,9 +94,14 @@ func New(opts ...ServerFuncOpt) (*Server, error) {
 
 	// configure server
 	s.cookies = sessions.NewCookieStore([]byte(s.sessionSecret))
+	s.cookies.Options.Secure = true
+	s.cookies.Options.HttpOnly = true
+	s.cookies.Options.SameSite = http.SameSiteStrictMode
+
 	if err := s.ConfigureOpenID(); err != nil {
 		return nil, err
 	}
+	s.configureResponseHeaders()
 	s.routes()
 
 	return s, nil
@@ -161,6 +167,32 @@ func (s *Server) ConfigureOpenID() error {
 	return nil
 }
 
+func (s *Server) configureResponseHeaders() {
+	s.reponseHeaders = make(map[string]string)
+
+	// The following headers are added for security
+
+	// Prevent click-jacking. Note this is obselete for newer browsers
+	// that support: Content-Security-Policy frame-ancestors 'none'
+	s.reponseHeaders["X-Frame-Options"] = "DENY"
+
+	// Prevent XSS attacks and click-jacking
+	s.reponseHeaders["Content-Security-Policy"] = "default-src 'self';" + // by default all content (css, script, img, etc) must come from our URL:port
+		"style-src https://maxcdn.bootstrapcdn.com;" + // .css exceptions
+		"script-src https://code.jquery.com https://cdnjs.cloudflare.com https://maxcdn.bootstrapcdn.com;" + // .js exceptions
+		"frame-ancestors 'none';" // page cannot be embedded in frame, similar to X-Frame-Options: DENY
+}
+
+func (s *Server) commonHeadersMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		for header, value := range s.reponseHeaders {
+			w.Header().Set(header, value)
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 func logAndError(w http.ResponseWriter, code int, err error, msg string) {
 	log.WithError(err).Error(msg)
 	http.Error(w, http.StatusText(code), code)
@@ -173,7 +205,7 @@ func writeJsonResponse(w http.ResponseWriter, httpResponse int, data interface{}
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(httpResponse) // keep this after w.Header().Set() to keep "Content-Type": "application/json"
 	if _, err := w.Write(jsonResp); err != nil {
 		logAndError(w, http.StatusInternalServerError, err, "failed to write JSON response")
@@ -192,6 +224,8 @@ func (s *Server) getSession(r *http.Request) *sessions.Session {
 }
 
 func (s *Server) routes() {
+	s.Use(s.commonHeadersMiddleware)
+
 	s.HandleFunc("/", s.handleRoot())
 	s.HandleFunc("/login", s.handleLogin()).Methods(http.MethodPost)
 	s.HandleFunc("/callback", s.handleCallback()).Methods(http.MethodPost)
