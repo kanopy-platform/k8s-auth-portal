@@ -319,3 +319,11 @@ func TestHandleHealthCheckGet(t *testing.T) {
 		assert.Equal(t, test.wantHealthStatus, response.Status)
 	}
 }
+
+func TestHandleMetricsGet(t *testing.T) {
+	t.Parallel()
+
+	rr := httptest.NewRecorder()
+	server.ServeHTTP(rr, httptest.NewRequest("GET", "/metrics", nil))
+	assert.Equal(t, http.StatusOK, rr.Code)
+}
