@@ -19,6 +19,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
 	"github.com/kanopy-platform/k8s-auth-portal/pkg/random"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/oauth2"
 )
@@ -230,6 +231,7 @@ func (s *Server) routes() {
 	s.HandleFunc("/login", s.handleLogin()).Methods(http.MethodPost)
 	s.HandleFunc("/callback", s.handleCallback()).Methods(http.MethodPost)
 	s.HandleFunc("/healthz", s.handleHealthCheck()).Methods(http.MethodGet)
+	s.Handle("/metrics", promhttp.Handler())
 }
 
 func (s *Server) handleRoot() http.HandlerFunc {
