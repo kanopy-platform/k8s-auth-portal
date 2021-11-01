@@ -129,9 +129,6 @@ func httpClientForRootCAs(rootCABytes []byte) (*http.Client, error) {
 func (s *Server) ConfigureOpenID() error {
 	var err error
 
-	// TODO research on http Clients
-	// should this be shared/cached or constructed in each handler?
-
 	// if the client has not been overridden with a mock client
 	if s.client == nil {
 		s.client = &http.Client{
@@ -229,7 +226,7 @@ func (s *Server) getSession(r *http.Request) *sessions.Session {
 func (s *Server) getIssuerIP() []net.IP {
 	addrs, err := net.LookupIP(s.issuerURL.Host)
 	if err != nil {
-		// log error but continue to return IPs
+		// log error but continue
 		log.WithError(err).Errorf("error looking up IPs for %v", s.issuerURL.Host)
 	}
 
