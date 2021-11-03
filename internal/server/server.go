@@ -224,6 +224,16 @@ func (s *Server) getSession(r *http.Request) *sessions.Session {
 	return session
 }
 
+func (s *Server) getIssuerIP() []net.IP {
+	addrs, err := net.LookupIP(s.issuerURL.Host)
+	if err != nil {
+		// log error but continue
+		log.WithError(err).Errorf("error looking up IPs for %v", s.issuerURL.Host)
+	}
+
+	return addrs
+}
+
 func (s *Server) routes() {
 	s.Use(s.commonHeadersMiddleware)
 
@@ -401,8 +411,9 @@ func (s *Server) handleHealthCheck() http.HandlerFunc {
 		if err != nil {
 			status := fmt.Sprintf("cannot connect to %v", s.issuerURL)
 			log.WithFields(log.Fields{
-				"issuerURL": s.issuerURL,
-				"err":       err,
+				"issuerURL":  s.issuerURL,
+				"issuer IPs": s.getIssuerIP(),
+				"err":        err,
 			}).Error(errPrefix + status)
 
 			writeJsonResponse(w, http.StatusBadGateway, healthCheckResponse{Status: status})
@@ -415,6 +426,7 @@ func (s *Server) handleHealthCheck() http.HandlerFunc {
 			status := fmt.Sprintf("cannot read response body from %v", s.issuerURL)
 			log.WithFields(log.Fields{
 				"issuerURL":   s.issuerURL,
+				"issuer IPs":  s.getIssuerIP(),
 				"err":         err,
 				"HTTP status": oidcResp.Status,
 			}).Error(errPrefix + status)
@@ -428,6 +440,7 @@ func (s *Server) handleHealthCheck() http.HandlerFunc {
 			status := fmt.Sprintf("oidc provider %v returned HTTP %v", s.issuerURL, oidcResp.Status)
 			log.WithFields(log.Fields{
 				"issuerURL":             s.issuerURL,
+				"issuer IPs":            s.getIssuerIP(),
 				"oidc healthz response": bodyString,
 			}).Error(errPrefix + status)
 
@@ -439,6 +452,7 @@ func (s *Server) handleHealthCheck() http.HandlerFunc {
 			status := fmt.Sprintf("oidc provider %v returned unexpected health check body", s.issuerURL)
 			log.WithFields(log.Fields{
 				"issuerURL":             s.issuerURL,
+				"issuer IPs":            s.getIssuerIP(),
 				"HTTP status":           oidcResp.Status,
 				"oidc healthz response": bodyString,
 			}).Error(errPrefix + status)
