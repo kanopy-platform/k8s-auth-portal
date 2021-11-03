@@ -41,7 +41,7 @@ steps:
         path: /go
     pull: always
     settings:
-      registry: public.ecr.aws/kanopy-sandbox
+      registry: public.ecr.aws/kanopy
       repo: ${DRONE_REPO_NAME}
       create_repository: true
       tags:
@@ -61,7 +61,7 @@ steps:
         path: /go
     pull: always
     settings:
-      registry: public.ecr.aws/kanopy-sandbox
+      registry: public.ecr.aws/kanopy
       repo: ${DRONE_REPO_NAME}
       tags:
         - git-${DRONE_COMMIT_SHA:0:7}
