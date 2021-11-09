@@ -52,6 +52,7 @@ type Server struct {
 	oauth2Config        oauth2ConfigProvider
 	client              *http.Client // OIDC client to support custom root CA certificates
 	verifier            oidcIDTokenVerifier
+	debugURL            *url.URL // TODO remove this once /healthz hang issue is resolved
 }
 
 type healthCheckResponse struct {
@@ -108,45 +109,38 @@ func New(opts ...ServerFuncOpt) (*Server, error) {
 	return s, nil
 }
 
-func httpClientForRootCAs(rootCABytes []byte) (*http.Client, error) {
-	tlsConfig := tls.Config{RootCAs: x509.NewCertPool()}
-	if !tlsConfig.RootCAs.AppendCertsFromPEM(rootCABytes) {
-		return nil, fmt.Errorf("no certs found in rootCABase64")
+func (s *Server) initHttpClient() error {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.DisableKeepAlives = true // This may prevent occasional http.Client lockups
+
+	if s.clusterCA != "" {
+		// decode root certificates
+		rootCABytes, err := base64.StdEncoding.DecodeString(s.clusterCA)
+		if err != nil {
+			return err
+		}
+
+		tlsConfig := tls.Config{RootCAs: x509.NewCertPool()}
+		if !tlsConfig.RootCAs.AppendCertsFromPEM(rootCABytes) {
+			return fmt.Errorf("no certs found in rootCABase64")
+		}
+
+		transport.TLSClientConfig = &tlsConfig
 	}
-	return &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tlsConfig,
-			Proxy:           http.ProxyFromEnvironment,
-			Dial: (&net.Dialer{
-				Timeout:   30 * time.Second,
-				KeepAlive: 30 * time.Second,
-			}).Dial,
-			TLSHandshakeTimeout:   10 * time.Second,
-			ExpectContinueTimeout: 1 * time.Second,
-		},
-	}, nil
+
+	s.client = &http.Client{
+		Transport: transport,
+		Timeout:   10 * time.Second,
+	}
+
+	return nil
 }
 
 func (s *Server) ConfigureOpenID() error {
-	var err error
-
 	// if the client has not been overridden with a mock client
 	if s.client == nil {
-		s.client = &http.Client{
-			Timeout: 10 * time.Second,
-		}
-
-		if s.clusterCA != "" {
-			// decode root certificates
-			rootCABytes, err := base64.StdEncoding.DecodeString(s.clusterCA)
-			if err != nil {
-				return err
-			}
-			// get HTTP Client with custom root CAs
-			s.client, err = httpClientForRootCAs(rootCABytes)
-			if err != nil {
-				return err
-			}
+		if err := s.initHttpClient(); err != nil {
+			return err
 		}
 	}
 
@@ -407,7 +401,10 @@ func (s *Server) handleHealthCheck() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		const errPrefix = "/healthz: "
 
-		oidcResp, err := s.client.Get(s.issuerURL.String() + "/healthz")
+		var oidcResp *http.Response
+		var err error
+
+		oidcResp, err = s.client.Get(s.issuerURL.String() + "/healthz")
 		if err != nil {
 			status := fmt.Sprintf("cannot connect to %v", s.issuerURL)
 			log.WithFields(log.Fields{
@@ -416,8 +413,42 @@ func (s *Server) handleHealthCheck() http.HandlerFunc {
 				"err":        err,
 			}).Error(errPrefix + status)
 
-			writeJsonResponse(w, http.StatusBadGateway, healthCheckResponse{Status: status})
-			return
+			// Code below is for debugging the /healthz hanging issue
+			// Once issue is resolved, this block can be deleted
+			// Debug Start
+
+			// try another service instead of OIDC provider
+			resp, err := s.client.Get(s.debugURL.String())
+			if err == nil {
+				log.Info(errPrefix + fmt.Sprintf("s.client.Get worked for: %v", s.debugURL))
+				resp.Body.Close()
+			} else {
+				log.Info(errPrefix + fmt.Sprintf("s.client.Get also failed for: %v", s.debugURL))
+			}
+
+			// retry with a new HTTP Client
+			if err := s.initHttpClient(); err != nil {
+				log.Error(errPrefix + fmt.Sprintf("s.initHttpClient() failed: %v", err))
+			}
+
+			oidcResp, err = s.client.Get(s.issuerURL.String() + "/healthz")
+			if err == nil {
+				log.Info(errPrefix + fmt.Sprintf("on retry with new http.Client, can connect to %v", s.issuerURL))
+			} else {
+				log.WithFields(log.Fields{
+					"issuerURL":  s.issuerURL,
+					"issuer IPs": s.getIssuerIP(),
+					"err":        err,
+				}).Error(errPrefix + fmt.Sprintf("on retry with new http.Client, cannot connect to %v", s.issuerURL))
+
+				writeJsonResponse(w, http.StatusBadGateway, healthCheckResponse{Status: status})
+				return
+			}
+
+			// Debug End
+			// TODO uncomment below
+			// writeJsonResponse(w, http.StatusBadGateway, healthCheckResponse{Status: status})
+			// return
 		}
 		defer oidcResp.Body.Close()
 

@@ -116,3 +116,17 @@ func WithHTTPClient(c *http.Client) ServerFuncOpt {
 		return nil
 	}
 }
+
+func WithDebugURL(debugUrl string) ServerFuncOpt {
+	return func(s *Server) error {
+		if debugUrl != "" {
+			u, err := url.ParseRequestURI(debugUrl)
+			if err != nil {
+				return err
+			}
+			s.debugURL = u
+		}
+
+		return nil
+	}
+}
