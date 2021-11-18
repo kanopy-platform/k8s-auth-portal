@@ -12,6 +12,7 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"net/http/httptrace"
 	"net/url"
 	"time"
 
@@ -228,6 +229,43 @@ func (s *Server) getIssuerIP() []net.IP {
 	return addrs
 }
 
+// TODO remove once http client hangup debug done
+func (s *Server) clientGetWithHttpTrace(url string) error {
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return err
+	}
+	clientTrace := &httptrace.ClientTrace{
+		// the order of HTTP lifecycle is same as listed order below
+		GetConn:      func(hostPort string) { log.Info(fmt.Sprintf("starting to create conn %v", hostPort)) },
+		DNSStart:     func(info httptrace.DNSStartInfo) { log.Info(fmt.Sprintf("starting to look up dns %v", info)) },
+		DNSDone:      func(info httptrace.DNSDoneInfo) { log.Info(fmt.Sprintf("done looking up dns %v", info)) },
+		ConnectStart: func(network, addr string) { log.Info(fmt.Sprintf("starting tcp connection %v %v", network, addr)) },
+		ConnectDone: func(network, addr string, err error) {
+			log.Info(fmt.Sprintf("tcp connection created %v %v %v", network, addr, err))
+		},
+		TLSHandshakeStart:    func() { log.Info("TLS Handshake started") },
+		TLSHandshakeDone:     func(cs tls.ConnectionState, e error) { log.Info("TLS Handshank done") },
+		GotConn:              func(info httptrace.GotConnInfo) { log.Info(fmt.Sprintf("connection established %v", info)) },
+		WroteHeaders:         func() { log.Info("wrote all request headers") },
+		WroteRequest:         func(info httptrace.WroteRequestInfo) { log.Info(fmt.Sprintf("wrote request %v", info)) },
+		GotFirstResponseByte: func() { log.Info("got first response byte") },
+		// below are not expected to be called, but included just in case
+		PutIdleConn:    func(err error) { log.Info(fmt.Sprintf("putting connection back in idle pool, err %v", err)) },
+		Got100Continue: func() { log.Info("got 100 Continue response") },
+	}
+	clientTraceCtx := httptrace.WithClientTrace(req.Context(), clientTrace)
+	req = req.WithContext(clientTraceCtx)
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return err
+	}
+
+	defer resp.Body.Close()
+
+	return nil
+}
+
 func (s *Server) routes() {
 	s.Use(s.commonHeadersMiddleware)
 
@@ -417,7 +455,14 @@ func (s *Server) handleHealthCheck() http.HandlerFunc {
 			// Once issue is resolved, this block can be deleted
 			// Debug Start
 
+			// call GET with http-tracing
+			log.Info(errPrefix + "retrying with http-tracing...")
+			if err = s.clientGetWithHttpTrace(s.issuerURL.String() + "/healthz"); err != nil {
+				log.Error(errPrefix + fmt.Sprintf("s.clientGetWithHttpTrace failed: %v", err))
+			}
+
 			// try another service instead of OIDC provider
+			log.Info(errPrefix + "retrying with a different service...")
 			resp, err := s.client.Get(s.debugURL.String())
 			if err == nil {
 				log.Info(errPrefix + fmt.Sprintf("s.client.Get worked for: %v", s.debugURL))
@@ -427,6 +472,7 @@ func (s *Server) handleHealthCheck() http.HandlerFunc {
 			}
 
 			// retry with a new HTTP Client
+			log.Info(errPrefix + "replacing server's shared http.Client...")
 			if err := s.initHttpClient(); err != nil {
 				log.Error(errPrefix + fmt.Sprintf("s.initHttpClient() failed: %v", err))
 			}
