@@ -83,6 +83,7 @@ func New(opts ...ServerFuncOpt) (*Server, error) {
 	o := []ServerFuncOpt{
 		WithAPIServerURL("https://api.example.com"),
 		WithIssuerURL("https://dex.example.com"),
+		WithDebugURL("https://prometheus.example.com/metrics"),
 	}
 
 	opts = append(o, opts...)
@@ -464,11 +465,11 @@ func (s *Server) handleHealthCheck() http.HandlerFunc {
 			// try another service instead of OIDC provider
 			log.Info(errPrefix + "retrying with a different service...")
 			resp, err := s.client.Get(s.debugURL.String())
-			if err == nil {
+			if err != nil {
+				log.Info(errPrefix + fmt.Sprintf("s.client.Get also failed for: %v", s.debugURL))
+			} else {
 				log.Info(errPrefix + fmt.Sprintf("s.client.Get worked for: %v", s.debugURL))
 				resp.Body.Close()
-			} else {
-				log.Info(errPrefix + fmt.Sprintf("s.client.Get also failed for: %v", s.debugURL))
 			}
 
 			// retry with a new HTTP Client
@@ -478,9 +479,7 @@ func (s *Server) handleHealthCheck() http.HandlerFunc {
 			}
 
 			oidcResp, err = s.client.Get(s.issuerURL.String() + "/healthz")
-			if err == nil {
-				log.Info(errPrefix + fmt.Sprintf("on retry with new http.Client, can connect to %v", s.issuerURL))
-			} else {
+			if err != nil {
 				log.WithFields(log.Fields{
 					"issuerURL":  s.issuerURL,
 					"issuer IPs": s.getIssuerIP(),
@@ -489,6 +488,8 @@ func (s *Server) handleHealthCheck() http.HandlerFunc {
 
 				writeJsonResponse(w, http.StatusBadGateway, healthCheckResponse{Status: status})
 				return
+			} else {
+				log.Info(errPrefix + fmt.Sprintf("on retry with new http.Client, can connect to %v", s.issuerURL))
 			}
 
 			// Debug End
