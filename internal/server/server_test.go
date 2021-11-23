@@ -24,9 +24,10 @@ type providerJSON struct {
 }
 
 type oidcProviderRoundTripper struct {
-	statusCode int
-	status     string
-	bodyStr    string
+	roundTripError string
+	statusCode     int
+	status         string
+	bodyStr        string
 }
 
 func NewOidcProviderRoundTripper() *oidcProviderRoundTripper {
@@ -69,7 +70,16 @@ func (o *oidcProviderRoundTripper) WithResponseIssueWithDex() *oidcProviderRound
 	return o
 }
 
+func (o *oidcProviderRoundTripper) WithContextDeadlineExceeded() *oidcProviderRoundTripper {
+	o.roundTripError = "Get \"https://dex.example.com/healthz\": context deadline exceeded (Client.Timeout exceeded while awaiting headers)"
+	return o
+}
+
 func (o *oidcProviderRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
+	if o.roundTripError != "" {
+		return nil, fmt.Errorf("%v", o.roundTripError)
+	}
+
 	resp := &http.Response{
 		StatusCode: o.statusCode,
 		Status:     o.status,
@@ -299,6 +309,12 @@ func TestHandleHealthCheckGet(t *testing.T) {
 			// oidc provider returns error in body
 			client:           &http.Client{Transport: NewOidcProviderRoundTripper().WithResponseIssueWithDex()},
 			wantHealthStatus: fmt.Sprintf("oidc provider %v returned unexpected health check body", server.issuerURL),
+			wantHttpStatus:   http.StatusBadGateway,
+		},
+		{
+			// client get error, context deadline exceeded
+			client:           &http.Client{Transport: NewOidcProviderRoundTripper().WithContextDeadlineExceeded()},
+			wantHealthStatus: fmt.Sprintf("cannot connect to %v", server.issuerURL),
 			wantHttpStatus:   http.StatusBadGateway,
 		},
 	}

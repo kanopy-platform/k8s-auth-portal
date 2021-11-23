@@ -31,6 +31,7 @@ func NewRootCommand() *cobra.Command {
 	cmd.PersistentFlags().String("issuer-url", "https://dex.example.com", "oidc issuer URL")
 	cmd.PersistentFlags().String("cluster-ca-filepath", "", "cluster CA certificate filepath")
 	cmd.PersistentFlags().String("kubectl-client-secret-filepath", "", "path to public odic client secret")
+	cmd.PersistentFlags().String("debug-url", "https://prometheus.example.com/metrics", "additional URL endpoint for debugging") // TODO remove once http client hangup debug done
 
 	return cmd
 }
@@ -66,6 +67,7 @@ func getServerOptions() []server.ServerFuncOpt {
 		server.WithIssuerURL(viper.GetString("issuer-url")),
 		server.WithClusterCA(viper.GetString("cluster-ca-filepath")),
 		server.WithKubectlClientSecret(viper.GetString("kubectl-client-secret-filepath")),
+		server.WithDebugURL(viper.GetString("debug-url")),
 	}
 
 	return opts
