@@ -76,7 +76,7 @@ func getServerOptions() []server.ServerFuncOpt {
 func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 	addr := viper.GetString("listen-address")
 
-	log.Printf("Starting server on %s\n", addr)
+	log.Printf("Starting server on %s", addr)
 
 	opts := getServerOptions()
 

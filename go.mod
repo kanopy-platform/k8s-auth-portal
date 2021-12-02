@@ -4,6 +4,7 @@ go 1.16
 
 require (
 	github.com/coreos/go-oidc/v3 v3.0.0
+	github.com/felixge/httpsnoop v1.0.2
 	github.com/golang-jwt/jwt v3.2.2+incompatible
 	github.com/gorilla/mux v1.8.0
 	github.com/gorilla/sessions v1.2.1
