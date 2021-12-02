@@ -208,12 +208,12 @@ func logRequestMiddleware(next http.Handler) http.Handler {
 			"-",                                    // user-identity
 			"-",                                    // authuser
 			t.Format("02/Jan/2006 15:04:05 +0000"), // date
-			fmt.Sprintf("%v %v", r.Method, r.URL.Path), // request
+			fmt.Sprintf("%v %v %v", r.Method, r.URL.Path, r.Proto), // request
 			metrics.Code,                    // status
 			metrics.Written,                 // bytes written
 			r.Header.Get("referer"),         // referer
 			r.Header.Get("user-agent"),      // user-agent
-			metrics.Duration.Milliseconds(), // duration of HTTP handler TODO format as int milliseconds
+			metrics.Duration.Milliseconds(), // duration of HTTP handler
 		)
 	})
 }
