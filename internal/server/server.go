@@ -14,9 +14,12 @@ import (
 	"net/http"
 	"net/http/httptrace"
 	"net/url"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
+	"github.com/felixge/httpsnoop"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
 	"github.com/kanopy-platform/k8s-auth-portal/pkg/random"
@@ -180,6 +183,41 @@ func (s *Server) configureResponseHeaders() {
 		"frame-ancestors 'none';" // page cannot be embedded in frame, similar to X-Frame-Options: DENY
 }
 
+func logRequestMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t := time.Now()
+
+		// Execute the chain of handlers, while capturing HTTP metrics: code, bytes-written, duration
+		metrics := httpsnoop.CaptureMetrics(next, w, r)
+
+		host := r.Header.Get("x-forwarded-for")
+		if host == "" {
+			// r.RemoteAddr contains port, which we want to remove
+			idx := strings.LastIndex(r.RemoteAddr, ":")
+			if idx == -1 {
+				host = r.RemoteAddr
+			} else {
+				host = r.RemoteAddr[:idx]
+			}
+		}
+
+		// Combined log format
+		// Using fmt.Fprintf here because logrus prints timestamps and log level by default
+		fmt.Fprintf(os.Stderr, "%v %v %v [%v] %q %v %v %q %q %vms\n",
+			host,                                   // host
+			"-",                                    // user-identity
+			"-",                                    // authuser
+			t.Format("02/Jan/2006 15:04:05 +0000"), // date
+			fmt.Sprintf("%v %v %v", r.Method, r.URL.Path, r.Proto), // request
+			metrics.Code,                    // status
+			metrics.Written,                 // bytes written
+			r.Header.Get("referer"),         // referer
+			r.Header.Get("user-agent"),      // user-agent
+			metrics.Duration.Milliseconds(), // duration of HTTP handler
+		)
+	})
+}
+
 func (s *Server) commonHeadersMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		for header, value := range s.reponseHeaders {
@@ -268,6 +306,7 @@ func (s *Server) clientGetWithHttpTrace(url string) error {
 }
 
 func (s *Server) routes() {
+	s.Use(logRequestMiddleware)
 	s.Use(s.commonHeadersMiddleware)
 
 	s.HandleFunc("/", s.handleRoot())
