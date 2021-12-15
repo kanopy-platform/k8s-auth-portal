@@ -12,7 +12,6 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
-	"net/http/httptrace"
 	"net/url"
 	"os"
 	"strings"
@@ -56,7 +55,6 @@ type Server struct {
 	oauth2Config        oauth2ConfigProvider
 	client              *http.Client // OIDC client to support custom root CA certificates
 	verifier            oidcIDTokenVerifier
-	debugURL            *url.URL // TODO remove this once /healthz hang issue is resolved
 }
 
 type healthCheckResponse struct {
@@ -86,7 +84,6 @@ func New(opts ...ServerFuncOpt) (*Server, error) {
 	o := []ServerFuncOpt{
 		WithAPIServerURL("https://api.example.com"),
 		WithIssuerURL("https://dex.example.com"),
-		WithDebugURL("https://prometheus.example.com/metrics"),
 	}
 
 	opts = append(o, opts...)
@@ -116,7 +113,9 @@ func New(opts ...ServerFuncOpt) (*Server, error) {
 
 func (s *Server) initHttpClient() error {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.DisableKeepAlives = true // This may prevent occasional http.Client lockups
+	// Temporary workaround for traefik scale down to try another connection each time
+	// Should not be needed once cluster upgrades to Kubernetes v1.22
+	transport.DisableKeepAlives = true
 
 	if s.clusterCA != "" {
 		// decode root certificates
@@ -266,43 +265,6 @@ func (s *Server) getIssuerIP() []net.IP {
 	}
 
 	return addrs
-}
-
-// TODO remove once http client hangup debug done
-func (s *Server) clientGetWithHttpTrace(url string) error {
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return err
-	}
-	clientTrace := &httptrace.ClientTrace{
-		// the order of HTTP lifecycle is same as listed order below
-		GetConn:      func(hostPort string) { log.Info(fmt.Sprintf("starting to create conn %v", hostPort)) },
-		DNSStart:     func(info httptrace.DNSStartInfo) { log.Info(fmt.Sprintf("starting to look up dns %v", info)) },
-		DNSDone:      func(info httptrace.DNSDoneInfo) { log.Info(fmt.Sprintf("done looking up dns %v", info)) },
-		ConnectStart: func(network, addr string) { log.Info(fmt.Sprintf("starting tcp connection %v %v", network, addr)) },
-		ConnectDone: func(network, addr string, err error) {
-			log.Info(fmt.Sprintf("tcp connection created %v %v %v", network, addr, err))
-		},
-		TLSHandshakeStart:    func() { log.Info("TLS Handshake started") },
-		TLSHandshakeDone:     func(cs tls.ConnectionState, e error) { log.Info("TLS Handshank done") },
-		GotConn:              func(info httptrace.GotConnInfo) { log.Info(fmt.Sprintf("connection established %v", info)) },
-		WroteHeaders:         func() { log.Info("wrote all request headers") },
-		WroteRequest:         func(info httptrace.WroteRequestInfo) { log.Info(fmt.Sprintf("wrote request %v", info)) },
-		GotFirstResponseByte: func() { log.Info("got first response byte") },
-		// below are not expected to be called, but included just in case
-		PutIdleConn:    func(err error) { log.Info(fmt.Sprintf("putting connection back in idle pool, err %v", err)) },
-		Got100Continue: func() { log.Info("got 100 Continue response") },
-	}
-	clientTraceCtx := httptrace.WithClientTrace(req.Context(), clientTrace)
-	req = req.WithContext(clientTraceCtx)
-	resp, err := s.client.Do(req)
-	if err != nil {
-		return err
-	}
-
-	defer resp.Body.Close()
-
-	return nil
 }
 
 func (s *Server) routes() {
@@ -479,10 +441,7 @@ func (s *Server) handleHealthCheck() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		const errPrefix = "/healthz: "
 
-		var oidcResp *http.Response
-		var err error
-
-		oidcResp, err = s.client.Get(s.issuerURL.String() + "/healthz")
+		oidcResp, err := s.client.Get(s.issuerURL.String() + "/healthz")
 		if err != nil {
 			status := fmt.Sprintf("cannot connect to %v", s.issuerURL)
 			log.WithFields(log.Fields{
@@ -491,50 +450,8 @@ func (s *Server) handleHealthCheck() http.HandlerFunc {
 				"err":        err,
 			}).Error(errPrefix + status)
 
-			// Code below is for debugging the /healthz hanging issue
-			// Once issue is resolved, this block can be deleted
-			// Debug Start
-
-			// call GET with http-tracing
-			log.Info(errPrefix + "retrying with http-tracing...")
-			if err = s.clientGetWithHttpTrace(s.issuerURL.String() + "/healthz"); err != nil {
-				log.Error(errPrefix + fmt.Sprintf("s.clientGetWithHttpTrace failed: %v", err))
-			}
-
-			// try another service instead of OIDC provider
-			log.Info(errPrefix + "retrying with a different service...")
-			resp, err := s.client.Get(s.debugURL.String())
-			if err != nil {
-				log.Info(errPrefix + fmt.Sprintf("s.client.Get also failed for: %v", s.debugURL))
-			} else {
-				log.Info(errPrefix + fmt.Sprintf("s.client.Get worked for: %v", s.debugURL))
-				resp.Body.Close()
-			}
-
-			// retry with a new HTTP Client
-			log.Info(errPrefix + "replacing server's shared http.Client...")
-			if err := s.initHttpClient(); err != nil {
-				log.Error(errPrefix + fmt.Sprintf("s.initHttpClient() failed: %v", err))
-			}
-
-			oidcResp, err = s.client.Get(s.issuerURL.String() + "/healthz")
-			if err != nil {
-				log.WithFields(log.Fields{
-					"issuerURL":  s.issuerURL,
-					"issuer IPs": s.getIssuerIP(),
-					"err":        err,
-				}).Error(errPrefix + fmt.Sprintf("on retry with new http.Client, cannot connect to %v", s.issuerURL))
-
-				writeJsonResponse(w, http.StatusBadGateway, healthCheckResponse{Status: status})
-				return
-			} else {
-				log.Info(errPrefix + fmt.Sprintf("on retry with new http.Client, can connect to %v", s.issuerURL))
-			}
-
-			// Debug End
-			// TODO uncomment below
-			// writeJsonResponse(w, http.StatusBadGateway, healthCheckResponse{Status: status})
-			// return
+			writeJsonResponse(w, http.StatusBadGateway, healthCheckResponse{Status: status})
+			return
 		}
 		defer oidcResp.Body.Close()
 
