@@ -1,6 +1,6 @@
 ---
 kind: pipeline
-type: kubernetes
+# type: kubernetes
 name: default
 
 trigger:
@@ -22,6 +22,12 @@ steps:
     commands:
       - apk add make
       - make test
+
+  - name: license-check
+    image: public.ecr.aws/kanopy/licensed-go:3.4.4
+    commands:
+      - licensed cache
+      - licensed status
 
   - name: build
     image: plugins/kaniko-ecr
