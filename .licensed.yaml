@@ -1,0 +1,20 @@
+sources:
+  go: true
+allowed:
+  - mit
+  - apache-2.0
+  - mpl-2.0
+  - bsd-2-clause
+  - bsd-3-clause
+  - isc
+reviewed:
+  go:
+    - golang.org/x/**/* # bsd-style
+    - google.golang.org/**/* # bsd-style
+    - gopkg.in/ini.v1 # apache-2.0
+    - gopkg.in/yaml.v2 # apache-2.0
+    # not sure why the following licenses weren't picked up automatically
+    - github.com/gorilla/mux # bsd-3
+    - github.com/gorilla/securecookie # bsd-3
+    - github.com/gorilla/sessions # bsd-3
+    - github.com/magiconair/properties # bsd-2
