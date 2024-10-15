@@ -15,7 +15,7 @@ volumes:
 
 steps:
   - name: test
-    image: golangci/golangci-lint:v1.38.0-alpine
+    image: golangci/golangci-lint:latest-alpine
     volumes:
       - name: cache
         path: /go
