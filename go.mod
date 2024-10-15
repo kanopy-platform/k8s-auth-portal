@@ -1,6 +1,6 @@
 module github.com/kanopy-platform/k8s-auth-portal
 
-go 1.23.2
+go 1.23
 
 require (
 	github.com/coreos/go-oidc/v3 v3.0.0
