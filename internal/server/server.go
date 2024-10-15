@@ -382,18 +382,14 @@ func (s *Server) handleCallback() http.HandlerFunc {
 			return
 		}
 
-		// retrieve the PKCE code verifier from the session
 		codeVerifier, ok := session.Values["code_verifier"].(string)
 		if !ok {
-			logAndError(w, http.StatusBadRequest, fmt.Errorf("code verifier not found in session"), "error retrieving code verifier")
+			logAndError(w, http.StatusUnauthorized, fmt.Errorf("code verifier not found in session"), "error retrieving code verifier")
 			return
 		}
 
-		oauth2Token, err := s.oauth2Config.Exchange(
-			oidcContext,
-			code,
-			oauth2.VerifierOption(codeVerifier),
-		)
+		// convert authorization code into an OAuth2 token
+		oauth2Token, err := s.oauth2Config.Exchange(oidcContext, code, oauth2.VerifierOption(codeVerifier))
 		if err != nil {
 			logAndError(w, http.StatusUnauthorized, err, "error converting code to token")
 			return
