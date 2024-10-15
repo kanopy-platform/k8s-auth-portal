@@ -339,12 +339,18 @@ func (s *Server) handleLogin() http.HandlerFunc {
 		}
 		session.Values["nonce"] = nonce
 
+		// generate a PKCE code verifier
+		codeVerifier := oauth2.GenerateVerifier()
+
+		// store code_verifier for token exchange
+		session.Values["code_verifier"] = codeVerifier
+
 		if err := session.Save(r, w); err != nil {
 			logAndError(w, http.StatusInternalServerError, err, "error saving session")
 			return
 		}
 
-		http.Redirect(w, r, s.oauth2Config.AuthCodeURL(randomStr, oidc.Nonce(nonce)), http.StatusSeeOther)
+		http.Redirect(w, r, s.oauth2Config.AuthCodeURL(randomStr, oidc.Nonce(nonce), oauth2.S256ChallengeOption(codeVerifier)), http.StatusSeeOther)
 	}
 }
 
@@ -376,8 +382,18 @@ func (s *Server) handleCallback() http.HandlerFunc {
 			return
 		}
 
-		// convert authorization code into an OAuth2 token
-		oauth2Token, err := s.oauth2Config.Exchange(oidcContext, code)
+		// retrieve the PKCE code verifier from the session
+		codeVerifier, ok := session.Values["code_verifier"].(string)
+		if !ok {
+			logAndError(w, http.StatusBadRequest, fmt.Errorf("code verifier not found in session"), "error retrieving code verifier")
+			return
+		}
+
+		oauth2Token, err := s.oauth2Config.Exchange(
+			oidcContext,
+			code,
+			oauth2.VerifierOption(codeVerifier),
+		)
 		if err != nil {
 			logAndError(w, http.StatusUnauthorized, err, "error converting code to token")
 			return
