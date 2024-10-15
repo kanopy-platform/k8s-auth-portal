@@ -9,7 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -363,7 +363,7 @@ func (s *Server) handleCallback() http.HandlerFunc {
 
 		// handle requests that contain an error
 		if err := r.URL.Query().Get("error"); err != "" {
-			logAndError(w, http.StatusBadRequest, fmt.Errorf(err+": "+r.URL.Query().Get("error_description")), "error in request")
+			logAndError(w, http.StatusBadRequest, fmt.Errorf("%s: %s", err, r.URL.Query().Get("error_description")), "error in request")
 			return
 		}
 
@@ -467,7 +467,7 @@ func (s *Server) handleHealthCheck() http.HandlerFunc {
 		}
 		defer oidcResp.Body.Close()
 
-		bodyBytes, err := ioutil.ReadAll(oidcResp.Body)
+		bodyBytes, err := io.ReadAll(oidcResp.Body)
 		if err != nil {
 			status := fmt.Sprintf("cannot read response body from %v", s.issuerURL)
 			log.WithFields(log.Fields{
