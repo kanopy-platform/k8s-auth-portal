@@ -388,7 +388,7 @@ func (s *Server) handleCallback() http.HandlerFunc {
 			return
 		}
 
-		// convert authorization code into an OAuth2 token
+		// convert authorization code into an OAuth2 token with added PKCE verifier opt
 		oauth2Token, err := s.oauth2Config.Exchange(oidcContext, code, oauth2.VerifierOption(codeVerifier))
 		if err != nil {
 			logAndError(w, http.StatusUnauthorized, err, "error converting code to token")
