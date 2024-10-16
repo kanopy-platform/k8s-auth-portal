@@ -24,7 +24,7 @@ steps:
       - make test
 
   - name: license-check
-    image: public.ecr.aws/kanopy/licensed-go:3.4.4
+    image: public.ecr.aws/kanopy/licensed-go:latest
     commands:
       - licensed cache
       - licensed status
