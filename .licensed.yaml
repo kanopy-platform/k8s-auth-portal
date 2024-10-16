@@ -18,6 +18,11 @@ reviewed:
     - github.com/gorilla/securecookie # bsd-3
     - github.com/gorilla/sessions # bsd-3
     - github.com/magiconair/properties # bsd-2
-    - github.com/klauspost/compress # bsd-3
     - github.com/munnerz/goautoneg # bsd-3
     - github.com/sagikazarmark/slog-shim # bsd-3
+    - github.com/klauspost/compress # bsd-3
+    - github.com/klauspost/compress/fse.dep.yml
+    - github.com/klauspost/compress/huff0.dep.yml
+    - github.com/klauspost/compress/internal/cpuinfo.dep.yml
+    - github.com/klauspost/compress/internal/snapref.dep.yml
+    - github.com/klauspost/compress/zstd.dep.yml
