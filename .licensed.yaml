@@ -18,3 +18,11 @@ reviewed:
     - github.com/gorilla/securecookie # bsd-3
     - github.com/gorilla/sessions # bsd-3
     - github.com/magiconair/properties # bsd-2
+    - github.com/munnerz/goautoneg # bsd-3
+    - github.com/sagikazarmark/slog-shim # bsd-3
+    - github.com/klauspost/compress # bsd-3
+    - github.com/klauspost/compress/fse # bsd-3 from github.com/klauspost/compress
+    - github.com/klauspost/compress/huff0 # bsd-3 from github.com/klauspost/compress
+    - github.com/klauspost/compress/internal/cpuinfo # bsd-3 from github.com/klauspost/compress
+    - github.com/klauspost/compress/internal/snapref # bsd-3
+    - github.com/klauspost/compress/zstd # bsd-3

@@ -15,7 +15,7 @@ volumes:
 
 steps:
   - name: test
-    image: golangci/golangci-lint:v1.38.0-alpine
+    image: golangci/golangci-lint:v1.61.0-alpine
     volumes:
       - name: cache
         path: /go
@@ -24,7 +24,7 @@ steps:
       - make test
 
   - name: license-check
-    image: public.ecr.aws/kanopy/licensed-go:3.4.4
+    image: public.ecr.aws/kanopy/licensed-go:4.0.4-0.3.0
     commands:
       - licensed cache
       - licensed status
