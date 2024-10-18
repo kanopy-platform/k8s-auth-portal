@@ -318,11 +318,11 @@ func (s *Server) handleLogin() http.HandlerFunc {
 		// Pass it into /login, which saves it in the session cookie.
 		// The /callback handler will verify the passed in state matches that from the session.
 		// This achieves the equivalent functionality as using "state" in URL.
-		randomStr, err := random.SecureString(32)
-		if err != nil {
-			logAndError(w, http.StatusInternalServerError, err, "error generating random string")
-			return
-		}
+		// randomStr, err := random.SecureString(32)
+		// if err != nil {
+		// 	logAndError(w, http.StatusInternalServerError, err, "error generating random string")
+		// 	return
+		// }
 
 		state := r.PostFormValue("state")
 		if state == "" {
@@ -338,9 +338,9 @@ func (s *Server) handleLogin() http.HandlerFunc {
 			return
 		}
 		session.Values["nonce"] = nonce
-
 		// generate a PKCE code verifier
 		codeVerifier := oauth2.GenerateVerifier()
+		codeChallenge := oauth2.S256ChallengeFromVerifier(codeVerifier)
 
 		// store code_verifier for token exchange
 		session.Values["code_verifier"] = codeVerifier
@@ -350,7 +350,12 @@ func (s *Server) handleLogin() http.HandlerFunc {
 			return
 		}
 
-		http.Redirect(w, r, s.oauth2Config.AuthCodeURL(randomStr, oidc.Nonce(nonce), oauth2.S256ChallengeOption(codeVerifier), oauth2.SetAuthURLParam("code_challenge_method", "S256")), http.StatusSeeOther)
+		redirectURL := s.oauth2Config.AuthCodeURL(state,
+			oidc.Nonce(nonce),
+			oauth2.SetAuthURLParam("code_challenge", codeChallenge),
+			oauth2.SetAuthURLParam("code_challenge_method", "S256"))
+
+		http.Redirect(w, r, redirectURL, http.StatusSeeOther)
 	}
 }
 
