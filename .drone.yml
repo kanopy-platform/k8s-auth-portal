@@ -50,7 +50,7 @@ depends_on:
   - test
 
 trigger:
-  branch: main
+  branch: add-pkce-auth
   event: [push, tag]
 
 steps:
@@ -76,7 +76,7 @@ depends_on:
   - test
 
 trigger:
-  branch: main
+  branch: add-pkce-auth
   event: [push, tag]
 
 steps:
