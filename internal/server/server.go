@@ -280,7 +280,15 @@ func (s *Server) routes() {
 
 func (s *Server) handleRoot() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		data := map[string]interface{}{}
+		state, err := random.SecureString(32)
+		if err != nil {
+			logAndError(w, http.StatusInternalServerError, err, "error generating random string for state")
+			return
+		}
+
+		data := map[string]interface{}{
+			"State": state,
+		}
 
 		if err := s.template.ExecuteTemplate(w, "view_index.tmpl", data); err != nil {
 			logAndError(w, http.StatusInternalServerError, err, "error executing template")
@@ -328,7 +336,6 @@ func (s *Server) handleLogin() http.HandlerFunc {
 
 		// generate a PKCE code verifier
 		codeVerifier := oauth2.GenerateVerifier()
-		//codeChallenge := oauth2.S256ChallengeFromVerifier(codeVerifier)
 
 		// store code_verifier for token exchange
 		session.Values["code_verifier"] = codeVerifier
@@ -338,12 +345,6 @@ func (s *Server) handleLogin() http.HandlerFunc {
 			return
 		}
 
-		// redirectURL := s.oauth2Config.AuthCodeURL(state,
-		// 	oidc.Nonce(nonce),
-		// 	oauth2.SetAuthURLParam("code_challenge", codeChallenge),
-		// 	oauth2.SetAuthURLParam("code_challenge_method", "S256"))
-
-		// http.Redirect(w, r, redirectURL, http.StatusSeeOther)
 		http.Redirect(w, r, s.oauth2Config.AuthCodeURL(state, oidc.Nonce(nonce), oauth2.S256ChallengeOption(codeVerifier)), http.StatusSeeOther)
 	}
 }
