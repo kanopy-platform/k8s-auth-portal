@@ -350,7 +350,7 @@ func (s *Server) handleLogin() http.HandlerFunc {
 			return
 		}
 
-		http.Redirect(w, r, s.oauth2Config.AuthCodeURL(randomStr, oidc.Nonce(nonce), oauth2.S256ChallengeOption(codeVerifier)), http.StatusSeeOther)
+		http.Redirect(w, r, s.oauth2Config.AuthCodeURL(randomStr, oidc.Nonce(nonce), oauth2.S256ChallengeOption(codeVerifier), oauth2.SetAuthURLParam("code_challenge_method", "S256")), http.StatusSeeOther)
 	}
 }
 
