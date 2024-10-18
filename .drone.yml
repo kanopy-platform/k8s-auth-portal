@@ -50,7 +50,7 @@ depends_on:
   - test
 
 trigger:
-  branch: main
+  branch: add-pkce-auth
   event: [push, tag]
 
 steps:
@@ -59,8 +59,7 @@ steps:
     settings:
       registry: public.ecr.aws/kanopy
       repo: ${DRONE_REPO_NAME}
-      auto_tag: true
-      auto_tag_suffix: amd64
+      tags: git-${DRONE_COMMIT_SHA:0:7}-test-amd64
       access_key:
         from_secret: ecr_access_key
       secret_key:
@@ -76,7 +75,7 @@ depends_on:
   - test
 
 trigger:
-  branch: main
+  branch: add-pkce-auth
   event: [push, tag]
 
 steps:
@@ -85,8 +84,7 @@ steps:
     settings:
       registry: public.ecr.aws/kanopy
       repo: ${DRONE_REPO_NAME}
-      auto_tag: true
-      auto_tag_suffix: arm64
+      tags: git-${DRONE_COMMIT_SHA:0:7}-test-arm64
       access_key:
         from_secret: ecr_access_key
       secret_key:

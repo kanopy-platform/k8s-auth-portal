@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
 	"net/url"
@@ -16,6 +17,7 @@ import (
 
 var idTokenString string
 var testNonce string
+var testCodeChallenge string
 
 type mockOauth2Config struct{}
 
@@ -29,6 +31,19 @@ func (m *mockOauth2Config) AuthCodeURL(state string, opts ...oauth2.AuthCodeOpti
 	v := url.Values{}
 	v.Set("state", state)
 
+	// Check for PKCE code_challenge option
+	for _, opt := range opts {
+		switch o := opt.(type) {
+		case oauth2.AuthCodeOption:
+			if strings.Contains(fmt.Sprintf("%v", o), "code_challenge") {
+				codeChallenge := fmt.Sprintf("%v", o)
+				v.Set("code_challenge", codeChallenge)
+				v.Set("code_challenge_method", "S256")
+				testCodeChallenge = codeChallenge
+			}
+		}
+	}
+
 	u.RawQuery = v.Encode()
 	return u.String()
 }
@@ -39,6 +54,30 @@ func (m *mockOauth2Config) Exchange(ctx context.Context, code string, opts ...oa
 		TokenType:    "",
 		RefreshToken: "",
 		Expiry:       time.Now().Add(1 * time.Hour),
+	}
+
+	var codeVerifier string
+	for _, opt := range opts {
+		// transforms code_verifier to a string for mocking purposes
+		optStr := fmt.Sprintf("%v", opt)
+		if strings.Contains(optStr, "code_verifier") {
+			codeVerifier = strings.TrimPrefix(optStr, "{code_verifier ")
+			codeVerifier = strings.TrimSuffix(codeVerifier, "}")
+			break
+		}
+	}
+
+	if codeVerifier == "" {
+		return nil, fmt.Errorf("mock: code_verifier is missing")
+	}
+
+	hasher := sha256.New()
+	hasher.Write([]byte(codeVerifier))
+	actualChallenge := base64.RawURLEncoding.EncodeToString(hasher.Sum(nil))
+
+	// Compare the computed code_challenge with the one stored in testCodeChallenge
+	if actualChallenge != testCodeChallenge {
+		return nil, fmt.Errorf("mock: code_verifier does not match the expected challenge")
 	}
 
 	privateKey, err := rsa.GenerateKey(rand.Reader, 1024)
