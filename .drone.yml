@@ -4,7 +4,10 @@ type: kubernetes
 name: test
 
 trigger:
-  branch: [main]
+  event:
+    - push
+    - pull_request
+    - tag
 
 workspace:
   path: /go/src/github.com/${DRONE_REPO}
@@ -59,7 +62,7 @@ steps:
       registry: public.ecr.aws/kanopy
       repo: ${DRONE_REPO_NAME}
       tags:
-        - ${DRONE_COMMIT_SHA}-amd64
+        - git-${DRONE_COMMIT_SHA:0:7}-amd64
       access_key:
         from_secret: ecr_access_key
       secret_key:
@@ -84,7 +87,7 @@ steps:
       registry: public.ecr.aws/kanopy
       repo: ${DRONE_REPO_NAME}
       tags:
-        - ${DRONE_COMMIT_SHA}-arm64
+        - git-${DRONE_COMMIT_SHA:0:7}-arm64
       access_key:
         from_secret: ecr_access_key
       secret_key:
