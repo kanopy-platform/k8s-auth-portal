@@ -1,6 +1,8 @@
 package server
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -205,11 +207,17 @@ func TestHandleCallbackPost(t *testing.T) {
 		validAuthCode    = "test-code-123"
 	)
 	testNonce = "test-nonce-123"
+	testCodeVerifier := "test-verifier-123"
+
+	hasher := sha256.New()
+	hasher.Write([]byte(testCodeVerifier))
+	testCodeChallenge = base64.RawURLEncoding.EncodeToString(hasher.Sum(nil)) // Store challenge for later validation
 
 	tests := []struct {
 		url            string
 		body           string
 		nonce          string
+		codeVerifier   string
 		wantHttpStatus int
 	}{
 		{
@@ -217,6 +225,7 @@ func TestHandleCallbackPost(t *testing.T) {
 			url:            validCallbackUrl,
 			body:           fmt.Sprintf("state=%s&code=%s", sessionState, validAuthCode),
 			nonce:          testNonce,
+			codeVerifier:   testCodeVerifier,
 			wantHttpStatus: http.StatusOK,
 		},
 		{
@@ -224,6 +233,7 @@ func TestHandleCallbackPost(t *testing.T) {
 			url:            "/callback?code=testcode&error=some-error",
 			body:           fmt.Sprintf("state=%s&code=%s", sessionState, validAuthCode),
 			nonce:          testNonce,
+			codeVerifier:   testCodeVerifier,
 			wantHttpStatus: http.StatusBadRequest,
 		},
 		{
@@ -231,6 +241,7 @@ func TestHandleCallbackPost(t *testing.T) {
 			url:            validCallbackUrl,
 			body:           fmt.Sprintf("code=%s", validAuthCode),
 			nonce:          testNonce,
+			codeVerifier:   testCodeVerifier,
 			wantHttpStatus: http.StatusBadRequest,
 		},
 		{
@@ -238,6 +249,7 @@ func TestHandleCallbackPost(t *testing.T) {
 			url:            validCallbackUrl,
 			body:           fmt.Sprintf("state=&code=%s", validAuthCode),
 			nonce:          testNonce,
+			codeVerifier:   testCodeVerifier,
 			wantHttpStatus: http.StatusBadRequest,
 		},
 		{
@@ -245,6 +257,7 @@ func TestHandleCallbackPost(t *testing.T) {
 			url:            validCallbackUrl,
 			body:           fmt.Sprintf("state=%s&code=%s", "mismatched-state", validAuthCode),
 			nonce:          testNonce,
+			codeVerifier:   testCodeVerifier,
 			wantHttpStatus: http.StatusBadRequest,
 		},
 		{
@@ -252,6 +265,7 @@ func TestHandleCallbackPost(t *testing.T) {
 			url:            validCallbackUrl,
 			body:           fmt.Sprintf("state=%s", sessionState),
 			nonce:          testNonce,
+			codeVerifier:   testCodeVerifier,
 			wantHttpStatus: http.StatusUnauthorized,
 		},
 		{
@@ -259,6 +273,7 @@ func TestHandleCallbackPost(t *testing.T) {
 			url:            validCallbackUrl,
 			body:           fmt.Sprintf("state=%s&code=", sessionState),
 			nonce:          testNonce,
+			codeVerifier:   testCodeVerifier,
 			wantHttpStatus: http.StatusUnauthorized,
 		},
 		{
@@ -266,6 +281,23 @@ func TestHandleCallbackPost(t *testing.T) {
 			url:            validCallbackUrl,
 			body:           fmt.Sprintf("state=%s&code=%s", sessionState, validAuthCode),
 			nonce:          "mismatched-nonce",
+			codeVerifier:   testCodeVerifier,
+			wantHttpStatus: http.StatusUnauthorized,
+		},
+		{
+			// missing code_verifier in session
+			url:            validCallbackUrl,
+			body:           fmt.Sprintf("state=%s&code=%s", sessionState, validAuthCode),
+			nonce:          testNonce,
+			codeVerifier:   "",
+			wantHttpStatus: http.StatusUnauthorized,
+		},
+		{
+			// wrong code_verifier
+			url:            validCallbackUrl,
+			body:           fmt.Sprintf("state=%s&code=%s", sessionState, validAuthCode),
+			nonce:          testNonce,
+			codeVerifier:   "wrongcode",
 			wantHttpStatus: http.StatusUnauthorized,
 		},
 	}
@@ -278,10 +310,18 @@ func TestHandleCallbackPost(t *testing.T) {
 		session := server.getSession(req)
 		session.Values["state"] = sessionState
 		session.Values["nonce"] = test.nonce
+		session.Values["code_verifier"] = test.codeVerifier
 
 		server.ServeHTTP(rr, req)
 		assert.Equal(t, test.wantHttpStatus, rr.Code)
 		checkSecurityParameters(t, rr)
+
+		if test.wantHttpStatus == http.StatusOK {
+			session := server.getSession(req)
+			verifier, exists := session.Values["code_verifier"].(string)
+			assert.True(t, exists)
+			assert.Equal(t, test.codeVerifier, verifier)
+		}
 	}
 }
 
