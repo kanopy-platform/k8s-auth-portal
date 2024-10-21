@@ -58,8 +58,8 @@ steps:
     settings:
       registry: public.ecr.aws/kanopy
       repo: ${DRONE_REPO_NAME}
-      auto_tag: true
-      auto_tag_suffix: amd64
+      tags:
+        - ${DRONE_COMMIT_SHA}-amd64
       access_key:
         from_secret: ecr_access_key
       secret_key:
@@ -83,8 +83,8 @@ steps:
     settings:
       registry: public.ecr.aws/kanopy
       repo: ${DRONE_REPO_NAME}
-      auto_tag: true
-      auto_tag_suffix: arm64
+      tags:
+        - ${DRONE_COMMIT_SHA}-arm64
       access_key:
         from_secret: ecr_access_key
       secret_key:
