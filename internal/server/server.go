@@ -69,10 +69,16 @@ func New(opts ...ServerFuncOpt) (*Server, error) {
 		return nil, err
 	}
 
+	funcMap := template.FuncMap{
+		"formValue": func(s string) template.HTMLAttr {
+			return template.HTMLAttr(fmt.Sprintf("value=%q", s))
+		},
+	}
+
 	// set defaults
 	s := &Server{
 		Router:              mux.NewRouter(),
-		template:            template.Must(template.ParseFS(embeddedFS, "templates/*.tmpl")),
+		template:            template.Must(template.New("view_index.tmpl").Funcs(funcMap).ParseFS(embeddedFS, "templates/*.tmpl")),
 		sessionName:         "k8s-auth-portal-session",
 		sessionSecret:       randSecret,
 		kubectlClientID:     "kubectl",
