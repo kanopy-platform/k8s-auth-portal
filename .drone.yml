@@ -4,7 +4,10 @@ type: kubernetes
 name: test
 
 trigger:
-  branch: [main]
+  event:
+    - push
+    - pull_request
+    - tag
 
 workspace:
   path: /go/src/github.com/${DRONE_REPO}
@@ -42,7 +45,56 @@ steps:
 
 ---
 kind: pipeline
-name: publish-amd64
+name: publish-push-amd64
+platform:
+  arch: amd64
+
+depends_on:
+  - test
+
+trigger:
+  event: [push]
+
+steps:
+  - name: publish
+    image: plugins/kaniko-ecr
+    settings:
+      registry: public.ecr.aws/kanopy
+      repo: ${DRONE_REPO_NAME}
+      tags:
+        - git-${DRONE_COMMIT_SHA:0:7}-amd64
+      access_key:
+        from_secret: ecr_access_key
+      secret_key:
+        from_secret: ecr_secret_key
+
+---
+kind: pipeline
+name: publish-push-arm64
+platform:
+  arch: arm64
+
+depends_on:
+  - test
+
+trigger:
+  event: [push]
+
+steps:
+  - name: publish
+    image: plugins/kaniko-ecr
+    settings:
+      registry: public.ecr.aws/kanopy
+      repo: ${DRONE_REPO_NAME}
+      tags:
+        - git-${DRONE_COMMIT_SHA:0:7}-arm64
+      access_key:
+        from_secret: ecr_access_key
+      secret_key:
+        from_secret: ecr_secret_key
+---
+kind: pipeline
+name: publish-tag-amd64
 platform:
   arch: amd64
 
@@ -51,7 +103,7 @@ depends_on:
 
 trigger:
   branch: main
-  event: [push, tag]
+  event: [tag]
 
 steps:
   - name: publish
@@ -68,7 +120,7 @@ steps:
 
 ---
 kind: pipeline
-name: publish-arm64
+name: publish-tag-arm64
 platform:
   arch: arm64
 
@@ -77,7 +129,7 @@ depends_on:
 
 trigger:
   branch: main
-  event: [push, tag]
+  event: [tag]
 
 steps:
   - name: publish
